@@ -35,16 +35,26 @@ export const asegurarSeed = mutation({
 export const obtenerPorEmail = query({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
-    return await ctx.db
+    const usuario = await ctx.db
       .query("usuarios")
       .withIndex("by_email", (q) => q.eq("email", email))
       .unique();
+    // No se devuelve el documento completo (incluiría el email) — la UI solo
+    // necesita identidad y rol para la sesión.
+    return usuario ? { _id: usuario._id, nombre: usuario.nombre, rol: usuario.rol } : null;
   },
 });
 
 export const listar = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("usuarios").collect();
+    const usuarios = await ctx.db.query("usuarios").collect();
+    // Idem: se recorta a los campos que la UI necesita (p. ej. resolver
+    // responsableId → nombre), sin exponer el email de cada usuario.
+    return usuarios.map((usuario) => ({
+      _id: usuario._id,
+      nombre: usuario.nombre,
+      rol: usuario.rol,
+    }));
   },
 });
