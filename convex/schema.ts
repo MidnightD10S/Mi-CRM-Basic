@@ -10,9 +10,10 @@ import { authTables } from "@convex-dev/auth/server";
  *   - ventas.importe: dólares, se formatea como $1,200.50 en la UI (MID-20/21/23)
  *   - ventas.estado: "oportunidad_abierta" se muestra como "En marcha" (MID-21)
  *
- * TODO(MID-6/MID-7/MID-44): la tabla `usuarios` asume que la autenticación se
- * resuelve con Convex (p.ej. @convex-dev/auth); ajustar los campos de credenciales
- * cuando se decida el mecanismo concreto de login y recuperación de contraseña.
+ * MID-7: autenticación resuelta con @convex-dev/auth (provider Password,
+ * ver convex/auth.ts) — `authTables` trae sus propias tablas (`users`,
+ * `authAccounts`, etc.), separadas de `usuarios`. TODO(MID-44): falta el
+ * mecanismo real de recuperación de contraseña (hoy solo placeholder).
  */
 export default defineSchema({
   ...authTables,

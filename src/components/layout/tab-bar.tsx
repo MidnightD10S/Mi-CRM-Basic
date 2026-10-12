@@ -18,8 +18,13 @@ export function TabBar() {
   const items = NAV_ITEMS.filter((item) => !item.rolesVisibles || (rol && item.rolesVisibles.includes(rol)));
 
   async function cerrarSesion() {
-    await signOut();
-    router.push("/login");
+    // Mismo criterio que Sidebar: si `signOut()` rechaza, igual se redirige
+    // a /login en vez de dejar una promesa sin manejar.
+    try {
+      await signOut();
+    } finally {
+      router.push("/login");
+    }
   }
 
   return (

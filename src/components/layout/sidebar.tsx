@@ -21,8 +21,14 @@ export function Sidebar() {
   const items = NAV_ITEMS.filter((item) => !item.rolesVisibles || (rol && item.rolesVisibles.includes(rol)));
 
   async function cerrarSesion() {
-    await signOut();
-    router.push("/login");
+    // Si `signOut()` rechaza (p. ej. fallo de red), igual se redirige a
+    // /login en vez de dejar una promesa sin manejar y a la persona varada
+    // en la pantalla actual sin saber por qué el botón no hizo nada.
+    try {
+      await signOut();
+    } finally {
+      router.push("/login");
+    }
   }
 
   return (
