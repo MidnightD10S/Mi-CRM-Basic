@@ -1,0 +1,14 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm run build"
+
+[deploy]
+startCommand = "npm run start"
+healthcheckPath = "/hoy"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+# Variables de entorno a configurar en Railway (Settings > Variables):
+#   NEXT_PUBLIC_CONVEX_URL = URL del deployment de producción de Convex
+#                            (se obtiene con `npx convex deploy`, ver README).

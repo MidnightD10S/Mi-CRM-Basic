@@ -1,0 +1,193 @@
+@import "tailwindcss";
+
+/*
+ * Vibe CRM — design tokens
+ * Fuente de verdad: design/design.md y
+ * design/Prototipo CRM - navegable sin login/design_handoff_crm_pwa/_ds/.../tokens/*.css
+ * No crear valores nuevos fuera de aquí: todo componente consume estos tokens.
+ */
+
+:root {
+  /* Raw green scale */
+  --green-50: #f0fdf4;
+  --green-100: #dcfce7;
+  --green-200: #bbf7d0;
+  --green-300: #86efac;
+  --green-400: #4ade80;
+  --green-500: #22c55e;
+  --green-600: #16a34a;
+  --green-700: #15803d;
+  --green-800: #166534;
+  --green-900: #14532d;
+  --green-950: #052e16;
+
+  /* Raw cool-neutral scale */
+  --neutral-0: #ffffff;
+  --neutral-50: #f7f8f9;
+  --neutral-100: #f1f2f4;
+  --neutral-200: #e8eaed;
+  --neutral-300: #d8dbdf;
+  --neutral-400: #b0b5bc;
+  --neutral-500: #868d96;
+  --neutral-600: #656c75;
+  --neutral-700: #4a5159;
+  --neutral-800: #2e3338;
+  --neutral-900: #1a1d21;
+  --neutral-950: #0e0f11;
+
+  /* Semantic: primary */
+  --color-primary: #16a34a;
+  --color-primary-hover: #15803d;
+  --color-primary-active: #166534;
+  --color-primary-subtle: #f0fdf4;
+  --color-on-primary: #ffffff;
+
+  /* Semantic: surfaces & text */
+  --color-bg: #f7f8f9;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f2f4;
+  --color-border: #e8eaed;
+  --color-border-strong: #d8dbdf;
+  --color-text: #1a1d21;
+  --color-text-muted: #656c75;
+  --color-text-subtle: #868d96;
+  --color-focus: #16a34a;
+
+  /* Semantic: state (fg / bg / text) */
+  --color-success: #15803d;
+  --color-success-bg: #ecfdf3;
+  --color-success-text: #166534;
+  --color-warning: #b45309;
+  --color-warning-bg: #fffbeb;
+  --color-warning-text: #92400e;
+  --color-error: #dc2626;
+  --color-error-bg: #fef2f2;
+  --color-error-text: #991b1b;
+  --color-info: #2563eb;
+  --color-info-bg: #eff6ff;
+  --color-info-text: #1e40af;
+
+  /* Typography */
+  --text-4xl: 2.25rem;
+  --text-3xl: 1.875rem;
+  --text-2xl: 1.5rem;
+  --text-xl: 1.25rem;
+  --text-lg: 1.125rem;
+  --text-base: 1rem;
+  --text-sm: 0.875rem;
+  --text-xs: 0.75rem;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --leading-tight: 1.2;
+  --leading-body: 1.5;
+  --tracking-tight: -0.011em;
+  --tracking-caps: 0.06em;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Layout */
+  --content-max: 1200px;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 16px;
+  --radius-full: 9999px;
+
+  /* Control sizing */
+  --control-h: 48px;
+  --control-h-compact: 44px;
+  --touch-min: 44px;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(16, 24, 32, 0.04);
+  --shadow-sm: 0 1px 2px rgba(16, 24, 32, 0.06), 0 1px 3px rgba(16, 24, 32, 0.05);
+  --shadow-md: 0 2px 4px rgba(16, 24, 32, 0.05), 0 4px 12px rgba(16, 24, 32, 0.06);
+  --shadow-lg: 0 8px 24px rgba(16, 24, 32, 0.1);
+  --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-focus);
+}
+
+/* Dark mode: redefine semantics only. Toggle with data-theme="dark" on <html>. */
+[data-theme="dark"] {
+  --color-primary: #22c55e;
+  --color-primary-hover: #4ade80;
+  --color-primary-active: #86efac;
+  --color-primary-subtle: rgba(34, 197, 94, 0.14);
+  --color-on-primary: #052e16;
+
+  --color-bg: #0e0f11;
+  --color-surface: #16181b;
+  --color-surface-2: #1c1f23;
+  --color-border: #2a2e33;
+  --color-border-strong: #3a3f45;
+  --color-text: #ececed;
+  --color-text-muted: #9ba1a8;
+  --color-text-subtle: #71777e;
+  --color-focus: #4ade80;
+
+  --color-success: #4ade80;
+  --color-success-bg: rgba(34, 197, 94, 0.14);
+  --color-success-text: #86efac;
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(217, 119, 6, 0.16);
+  --color-warning-text: #fcd34d;
+  --color-error: #f87171;
+  --color-error-bg: rgba(220, 38, 38, 0.16);
+  --color-error-text: #fca5a5;
+  --color-info: #60a5fa;
+  --color-info-bg: rgba(37, 99, 235, 0.18);
+  --color-info-text: #93c5fd;
+}
+
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    letter-spacing: var(--tracking-tight);
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+}
+
+@layer utilities {
+  .font-tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
