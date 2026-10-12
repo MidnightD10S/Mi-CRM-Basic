@@ -40,7 +40,8 @@ convex/
   schema.ts           # tablas: usuarios, clientes, interacciones, seguimientos, ventas
 ```
 
-Cada pantalla todavía sin construir muestra un placeholder (`PantallaPendiente`)
+"Hoy" (MID-18) y el shell de navegación (MID-10) ya están construidos. Cada
+pantalla todavía sin construir muestra un placeholder (`PantallaPendiente`)
 con el id del issue de Linear que la implementa, para no perder la referencia.
 
 ## Primeros pasos
@@ -74,6 +75,21 @@ con el id del issue de Linear que la implementa, para no perder la referencia.
   "Atiende y vende" (MID-6).
 - **Recuperar contraseña**: entra como flujo real en el MVP, no como enlace sin
   función (MID-44).
+
+## Estado de seguridad (leer antes de publicar)
+
+**Todavía no existe autenticación ni autorización real (MID-7).** Todas las
+funciones de Convex son públicas: cualquiera con la URL del deployment puede
+leer o escribir clientes/seguimientos/usuarios sin iniciar sesión. Esto es
+aceptable mientras el deployment de Convex en uso sea el de **desarrollo**,
+sin datos reales del negocio. Antes de dar por buena una publicación real en
+Railway (es decir, que el equipo la use con datos de clientes reales), hay que
+implementar MID-7, o al menos decidir y documentar explícitamente que se
+acepta ese riesgo por un tiempo acotado.
+
+Railway está conectado a este repositorio para publicación automática: un
+`git push` a la rama por defecto dispara un deploy. Tenlo en cuenta antes de
+subir cambios — un push no es solo "guardar en GitHub", es "publicar".
 
 ## Despliegue
 
