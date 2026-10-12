@@ -12,8 +12,6 @@ import { api, type Id } from "@/lib/convex-generated";
 interface NuevaTareaOverlayProps {
   open: boolean;
   onClose: () => void;
-  /** null mientras la sesión todavía no se resolvió (ver useSessionUsuario). */
-  responsableId: Id<"usuarios"> | null;
 }
 
 interface ClienteSeleccionado {
@@ -28,8 +26,11 @@ interface ClienteSeleccionado {
  *
  * El "+ Nuevo cliente" del selector resuelve con un alta mínima inline
  * (nombre + teléfono/email opcional) — el alta completa es MID-11.
+ *
+ * El responsable no se manda desde aquí (MID-7): `seguimientos.crearTarea`
+ * lo toma de la sesión autenticada en el backend.
  */
-export function NuevaTareaOverlay({ open, onClose, responsableId }: NuevaTareaOverlayProps) {
+export function NuevaTareaOverlay({ open, onClose }: NuevaTareaOverlayProps) {
   const { show } = useToast();
   const crearTarea = useMutation(api.seguimientos.crearTarea);
   const crearClienteMinimo = useMutation(api.clientes.crearMinimo);
@@ -83,7 +84,7 @@ export function NuevaTareaOverlay({ open, onClose, responsableId }: NuevaTareaOv
   }
 
   async function guardar() {
-    if (!titulo.trim() || !cliente || !fecha || !responsableId) return;
+    if (!titulo.trim() || !cliente || !fecha) return;
     setGuardando(true);
     const [anio, mes, dia] = fecha.split("-").map(Number);
     const vence = new Date(anio, mes - 1, dia).getTime();
@@ -92,7 +93,6 @@ export function NuevaTareaOverlay({ open, onClose, responsableId }: NuevaTareaOv
         accion: titulo.trim(),
         clienteId: cliente.id,
         vence,
-        responsableId,
       });
       cerrar();
     } catch {
@@ -102,8 +102,7 @@ export function NuevaTareaOverlay({ open, onClose, responsableId }: NuevaTareaOv
     }
   }
 
-  const sesionLista = responsableId !== null;
-  const puedeGuardar = Boolean(titulo.trim() && cliente && fecha && sesionLista && !guardando);
+  const puedeGuardar = Boolean(titulo.trim() && cliente && fecha && !guardando);
 
   return (
     <Overlay open={open} onClose={cerrar} title="Nueva tarea">
@@ -214,7 +213,7 @@ export function NuevaTareaOverlay({ open, onClose, responsableId }: NuevaTareaOv
         />
 
         <Button onClick={guardar} disabled={!puedeGuardar}>
-          {sesionLista ? "Guardar" : "Preparando sesión…"}
+          {guardando ? "Guardando…" : "Guardar"}
         </Button>
       </div>
     </Overlay>

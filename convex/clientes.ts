@@ -1,10 +1,11 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireUsuario } from "./authHelpers";
 
 /**
- * TODO(MID-7): sin autenticación ni autorización real todavía (ver TODO en
- * convex/usuarios.ts). Alcance mínimo para MID-18 (selector de cliente de
- * "Nueva tarea"); el alta completa es MID-11.
+ * MID-7: todas las queries/mutations exigen sesión real (`requireUsuario`,
+ * ver convex/authHelpers.ts) — la protección vive en el backend, no solo en
+ * el guard de rutas de la UI.
  */
 
 // Límite explícito: MVP de negocio pequeño (decenas de clientes, no miles).
@@ -25,6 +26,7 @@ function validarEmail(email: string | undefined): void {
 export const buscar = query({
   args: { texto: v.string() },
   handler: async (ctx, { texto }) => {
+    await requireUsuario(ctx);
     const resultados =
       texto.trim() === ""
         ? await ctx.db.query("clientes").order("desc").take(LIMITE_BUSQUEDA)
@@ -46,10 +48,9 @@ export const crearMinimo = mutation({
     email: v.optional(v.string()),
   },
   handler: async (ctx, { nombre, telefono, email }) => {
-    // El tipo `v.string()` no impide una cadena vacía o solo espacios — Convex
-    // es una función pública (sin auth todavía, ver TODO arriba) que puede
-    // invocarse sin pasar por el formulario, así que la invariante de "no
-    // vacío" se valida aquí, no solo en la UI.
+    await requireUsuario(ctx);
+    // El tipo `v.string()` no impide una cadena vacía o solo espacios, así
+    // que la invariante de "no vacío" se valida aquí, no solo en la UI.
     const nombreLimpio = nombre.trim();
     if (!nombreLimpio) {
       throw new Error("El nombre del cliente no puede estar vacío.");
@@ -70,9 +71,8 @@ export const crearMinimo = mutation({
 /**
  * Alta completa (MID-11): además del alta mínima de arriba, admite empresa,
  * canal de origen y nota, y exige al menos un medio de contacto (teléfono o
- * email) — regla central del issue, validada aquí porque la función es
- * pública (sin auth todavía, TODO(MID-7) arriba) y no puede depender solo de
- * que la UI la respete.
+ * email) — regla central del issue, validada aquí porque no puede depender
+ * solo de que la UI la respete.
  */
 export const crear = mutation({
   args: {
@@ -86,6 +86,7 @@ export const crear = mutation({
     nota: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireUsuario(ctx);
     const nombreLimpio = args.nombre.trim();
     if (!nombreLimpio) {
       throw new Error("El nombre del cliente no puede estar vacío.");
@@ -131,6 +132,7 @@ function soloDigitos(valor: string): string {
 export const listar = query({
   args: { texto: v.string() },
   handler: async (ctx, { texto }) => {
+    await requireUsuario(ctx);
     const todos = await ctx.db.query("clientes").order("desc").take(LIMITE_LISTADO);
     const textoLimpio = texto.trim().toLowerCase();
     const textoDigitos = soloDigitos(texto);

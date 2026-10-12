@@ -11,7 +11,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { OverlayPendiente } from "@/components/ui/overlay-pendiente";
 import { useToast } from "@/components/ui/toast";
 import { NuevaTareaOverlay } from "./nueva-tarea-overlay";
-import { useSessionUsuario } from "@/lib/session";
 import { ESTADOS_CLIENTE, estadoClienteOFallback } from "@/lib/constants";
 import { formatSeguimientoDueLabel, startOfDay } from "@/lib/format";
 import { api, type Doc, type Id } from "@/lib/convex-generated";
@@ -28,11 +27,11 @@ type SeguimientoPendiente = {
 type AccesoRapido = "nueva-tarea" | "anotar-interaccion" | "registrar-venta" | "nuevo-cliente" | null;
 
 export default function HoyPage() {
-  const sesion = useSessionUsuario();
+  // La sesión ya está garantizada "lista" acá — RequireAuth (en el layout de
+  // (app)) no renderiza children hasta que lo esté (ver MID-7).
   const seguimientos = useQuery(api.seguimientos.listarPendientes);
   const marcarHecho = useMutation(api.seguimientos.marcarHecho);
   const deshacerHecho = useMutation(api.seguimientos.deshacerHecho);
-  const asegurarSeedUsuarios = useMutation(api.usuarios.asegurarSeed);
   const { show } = useToast();
 
   const [ocultosOptimistas, setOcultosOptimistas] = useState<Set<Id<"seguimientos">>>(new Set());
@@ -82,29 +81,12 @@ export default function HoyPage() {
   const proximas = visibles.filter((s) => startOfDay(new Date(s.vence)).getTime() > hoyInicio);
 
   const total = seguimientos.length;
-  const responsableId = sesion.status === "listo" ? sesion.usuarioId : null;
 
   return (
     <div className="mx-auto flex max-w-[860px] flex-col gap-5 p-5">
       <h1 className="text-2xl font-semibold tracking-[var(--tracking-tight)]">
         {total === 0 ? "Todo al día" : `${total} seguimientos/tareas pendientes`}
       </h1>
-
-      {sesion.status === "no_encontrado" && (
-        <Card className="flex flex-col gap-2 border-(--color-error) bg-(--color-error-bg)">
-          <p className="text-[14px] font-medium text-(--color-error-text)">
-            No se pudo preparar tu sesión.
-          </p>
-          <Button
-            variant="secondary"
-            size="compact"
-            className="w-fit"
-            onClick={() => asegurarSeedUsuarios()}
-          >
-            Reintentar
-          </Button>
-        </Card>
-      )}
 
       <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
         <Button
@@ -163,7 +145,6 @@ export default function HoyPage() {
       <NuevaTareaOverlay
         open={accesoAbierto === "nueva-tarea"}
         onClose={() => setAccesoAbierto(null)}
-        responsableId={responsableId}
       />
       <OverlayPendiente
         open={accesoAbierto === "anotar-interaccion"}

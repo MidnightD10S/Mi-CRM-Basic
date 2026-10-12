@@ -1,9 +1,9 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireUsuario } from "./authHelpers";
 
 /**
- * TODO(MID-7): sin autenticación ni autorización real todavía (ver TODO en
- * convex/usuarios.ts).
+ * MID-7: todas las queries/mutations exigen sesión real (`requireUsuario`).
  *
  * MID-18: todas las personas ven todos los seguimientos pendientes del
  * negocio, sin filtrar por responsable.
@@ -16,6 +16,7 @@ const LIMITE_PENDIENTES = 100;
 export const listarPendientes = query({
   args: {},
   handler: async (ctx) => {
+    await requireUsuario(ctx);
     const seguimientos = await ctx.db
       .query("seguimientos")
       .withIndex("by_hecho_vence", (q) => q.eq("hecho", false))
@@ -43,11 +44,12 @@ export const crearTarea = mutation({
     accion: v.string(),
     clienteId: v.id("clientes"),
     vence: v.number(),
-    responsableId: v.id("usuarios"),
   },
   handler: async (ctx, args) => {
-    // Igual que en clientes.crearMinimo: sin auth todavía, esta mutation es
-    // pública, así que la invariante de "no vacío" se valida aquí.
+    // MID-7: el responsable es quien tiene la sesión, no un id que mande el
+    // cliente — evita crear una tarea a nombre de otra persona con una
+    // sesión propia válida.
+    const usuario = await requireUsuario(ctx);
     const accionLimpia = args.accion.trim();
     if (!accionLimpia) {
       throw new Error("El título de la tarea no puede estar vacío.");
@@ -56,7 +58,7 @@ export const crearTarea = mutation({
       accion: accionLimpia,
       clienteId: args.clienteId,
       vence: args.vence,
-      responsableId: args.responsableId,
+      responsableId: usuario._id,
       hecho: false,
     });
   },
@@ -68,6 +70,7 @@ export const crearTarea = mutation({
 export const marcarHecho = mutation({
   args: { id: v.id("seguimientos") },
   handler: async (ctx, { id }) => {
+    await requireUsuario(ctx);
     await ctx.db.patch(id, { hecho: true, fechaHecho: Date.now() });
   },
 });
@@ -75,6 +78,7 @@ export const marcarHecho = mutation({
 export const deshacerHecho = mutation({
   args: { id: v.id("seguimientos") },
   handler: async (ctx, { id }) => {
+    await requireUsuario(ctx);
     await ctx.db.patch(id, { hecho: false, fechaHecho: undefined });
   },
 });

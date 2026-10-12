@@ -34,7 +34,7 @@ src/
   lib/
     constants.ts      # enums del dominio (roles, estados, canales) y sus etiquetas
     format.ts         # formato de moneda y fechas relativas
-    session.ts        # placeholder de sesión — sustituir al implementar login (MID-6/7/10/44)
+    session.ts        # sesión real (MID-7, Convex Auth) — cambiar contraseña queda en MID-8
     utils.ts          # cn() (clsx + tailwind-merge)
 convex/
   schema.ts           # tablas: usuarios, clientes, interacciones, seguimientos, ventas
@@ -78,14 +78,28 @@ con el id del issue de Linear que la implementa, para no perder la referencia.
 
 ## Estado de seguridad (leer antes de publicar)
 
-**Todavía no existe autenticación ni autorización real (MID-7).** Todas las
-funciones de Convex son públicas: cualquiera con la URL del deployment puede
-leer o escribir clientes/seguimientos/usuarios sin iniciar sesión. Esto es
-aceptable mientras el deployment de Convex en uso sea el de **desarrollo**,
-sin datos reales del negocio. Antes de dar por buena una publicación real en
-Railway (es decir, que el equipo la use con datos de clientes reales), hay que
-implementar MID-7, o al menos decidir y documentar explícitamente que se
-acepta ese riesgo por un tiempo acotado.
+**MID-7 (autenticación real con Convex Auth) ya está implementado**, pero
+solo contra el deployment de **desarrollo** (`formal-dotterel-607`):
+- Login real (email + contraseña) en `/login`, sesión persistente entre
+  recargas, sin registro público (el provider `Password` bloquea `signUp`).
+- Todas las queries/mutations de negocio (`clientes.ts`, `seguimientos.ts`,
+  `usuarios.listar`) exigen sesión válida en el **backend**
+  (`requireUsuario`, ver `convex/authHelpers.ts`) — no solo en la UI.
+  Verificado directamente contra la API HTTP de Convex, sin pasar por
+  ninguna pantalla: las llamadas sin sesión se rechazan con "No autenticado.".
+- Las dos cuentas (Emiliana/Marcelo) se crean con un bootstrap manual
+  (`npx convex run usuarios:asegurarCredenciales`, ver TODO en
+  `convex/usuarios.ts`) que nunca imprime contraseñas en un chat ni las deja
+  en texto plano una vez confirmada la cuenta.
+
+**Pendiente antes de producción:**
+- Las claves de Convex Auth (`JWT_PRIVATE_KEY`/`JWKS`) y el bootstrap de
+  credenciales solo existen en desarrollo — hay que repetirlos contra el
+  deployment de producción (`zany-starling-504`) antes de que el equipo use
+  la app publicada con datos reales.
+- "¿Olvidaste tu contraseña?" sigue siendo un placeholder (MID-44) — no hay
+  envío de email real todavía.
+- Cambiar la contraseña temporal por una propia (MID-8) no está construido.
 
 Railway está conectado a este repositorio para publicación automática: un
 `git push` a la rama por defecto dispara un deploy. Tenlo en cuenta antes de

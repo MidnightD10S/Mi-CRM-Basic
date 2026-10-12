@@ -1,16 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { LogOut } from "lucide-react";
 import { NAV_ITEMS } from "@/components/layout/nav-items";
-import { useCurrentUser } from "@/lib/session";
+import { useSessionUsuario } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
-/** Barra inferior fija, solo móvil (<768px). Ver MID-10/MID-42. */
+/** Barra inferior fija, solo móvil (<768px). Ver MID-10/MID-42/MID-7. */
 export function TabBar() {
   const pathname = usePathname();
-  const user = useCurrentUser();
-  const items = NAV_ITEMS.filter((item) => !item.rolesVisibles || item.rolesVisibles.includes(user.rol));
+  const router = useRouter();
+  const { signOut } = useAuthActions();
+  const sesion = useSessionUsuario();
+  const rol = sesion.status === "listo" ? sesion.rol : undefined;
+  const items = NAV_ITEMS.filter((item) => !item.rolesVisibles || (rol && item.rolesVisibles.includes(rol)));
+
+  async function cerrarSesion() {
+    await signOut();
+    router.push("/login");
+  }
 
   return (
     <nav
@@ -33,6 +43,17 @@ export function TabBar() {
           </Link>
         );
       })}
+      {/* No es un item de NAV_ITEMS (no es una ruta) — es la única forma de
+          cerrar sesión disponible en móvil, donde Sidebar no existe. */}
+      <button
+        type="button"
+        aria-label="Cerrar sesión"
+        onClick={cerrarSesion}
+        className="flex min-h-14 flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium text-(--color-text-subtle)"
+      >
+        <LogOut size={22} strokeWidth={1.5} />
+        Salir
+      </button>
     </nav>
   );
 }

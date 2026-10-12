@@ -1,6 +1,7 @@
 "use client";
 
-import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { ConvexReactClient } from "convex/react";
+import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { useEffect, type ReactNode } from "react";
 import { api } from "@/lib/convex-generated";
 
@@ -29,11 +30,17 @@ function AsegurarSeedUsuarios() {
   return null;
 }
 
+/**
+ * MID-7: `ConvexAuthProvider` (de @convex-dev/auth/react) reemplaza al
+ * `ConvexProvider` plano — gestiona la persistencia de la sesión entre
+ * recargas/cierres del navegador (almacenamiento del lado del cliente, sin
+ * requerir SSR, ya que toda la app es "use client").
+ */
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
   return (
-    <ConvexProvider client={convex}>
+    <ConvexAuthProvider client={convex}>
       <AsegurarSeedUsuarios />
       {children}
-    </ConvexProvider>
+    </ConvexAuthProvider>
   );
 }

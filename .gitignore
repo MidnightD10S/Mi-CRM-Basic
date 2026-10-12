@@ -46,3 +46,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# credenciales locales (MID-7): nunca deben subirse ni commitearse
+*.local.txt

@@ -1,19 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { LogOut } from "lucide-react";
 import { NAV_ITEMS } from "@/components/layout/nav-items";
 import { Avatar } from "@/components/ui/avatar";
 import { ROLES } from "@/lib/constants";
-import { useCurrentUser } from "@/lib/session";
+import { useSessionUsuario } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
-/** Barra lateral fija, solo escritorio (>=768px). Ver MID-10/MID-42. */
+/** Barra lateral fija, solo escritorio (>=768px). Ver MID-10/MID-42/MID-7. */
 export function Sidebar() {
   const pathname = usePathname();
-  const user = useCurrentUser();
-  const items = NAV_ITEMS.filter((item) => !item.rolesVisibles || item.rolesVisibles.includes(user.rol));
+  const router = useRouter();
+  const { signOut } = useAuthActions();
+  const sesion = useSessionUsuario();
+  const nombre = sesion.status === "listo" ? sesion.nombre : "";
+  const rol = sesion.status === "listo" ? sesion.rol : undefined;
+  const items = NAV_ITEMS.filter((item) => !item.rolesVisibles || (rol && item.rolesVisibles.includes(rol)));
+
+  async function cerrarSesion() {
+    await signOut();
+    router.push("/login");
+  }
 
   return (
     <aside className="hidden h-full w-60 shrink-0 flex-col gap-1 border-r border-(--color-border) bg-(--color-surface) p-3.5 md:flex">
@@ -50,16 +60,17 @@ export function Sidebar() {
           href="/cuenta"
           className="flex min-w-0 flex-1 items-center gap-2.5 rounded-(--radius-md) p-1.5 hover:bg-(--color-surface-2)"
         >
-          <Avatar nombre={user.nombre} />
+          <Avatar nombre={nombre} />
           <div className="flex min-w-0 flex-col">
-            <span className="truncate text-[13px] font-medium">{user.nombre}</span>
-            <span className="text-xs text-(--color-text-subtle)">{ROLES[user.rol]}</span>
+            <span className="truncate text-[13px] font-medium">{nombre}</span>
+            <span className="text-xs text-(--color-text-subtle)">{rol ? ROLES[rol] : ""}</span>
           </div>
         </Link>
         <button
           type="button"
           aria-label="Cerrar sesión"
           title="Cerrar sesión"
+          onClick={cerrarSesion}
           className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-(--radius-md) text-(--color-text-subtle) hover:bg-(--color-surface-2)"
         >
           <LogOut size={18} strokeWidth={1.5} />

@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 /**
  * Esquema de datos de Vibe CRM.
@@ -14,10 +15,26 @@ import { v } from "convex/values";
  * cuando se decida el mecanismo concreto de login y recuperación de contraseña.
  */
 export default defineSchema({
+  ...authTables,
+
   usuarios: defineTable({
     nombre: v.string(),
     email: v.string(),
     rol: v.union(v.literal("propietaria"), v.literal("comercial")),
+    // Bootstrap de credenciales (MID-7, ver convex/usuarios.ts): opcional,
+    // sin tocar nada existente. El estado "creada" NO tiene campo `password`
+    // — no se conserva texto plano una vez verificada la cuenta.
+    credencial: v.optional(
+      v.union(
+        v.object({
+          estado: v.literal("creando"),
+          reclamadoEn: v.number(),
+          token: v.string(),
+          password: v.string(),
+        }),
+        v.object({ estado: v.literal("creada") })
+      )
+    ),
   }).index("by_email", ["email"]),
 
   clientes: defineTable({
