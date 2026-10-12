@@ -20,6 +20,16 @@ export const ESTADOS_CLIENTE = {
 
 export type EstadoCliente = keyof typeof ESTADOS_CLIENTE;
 
+/**
+ * `clientes.estado` es opcional en el esquema (ver convex/schema.ts) para no
+ * depender de que el deployment esté vacío al añadir el campo. Cualquier
+ * cliente sin estado se trata como "nuevo_lead" — fallback explícito, no un
+ * valor inventado en cada pantalla.
+ */
+export function estadoClienteOFallback(estado: EstadoCliente | undefined): EstadoCliente {
+  return estado ?? "nuevo_lead";
+}
+
 export const CANALES_ORIGEN = {
   web: "Web",
   redes: "Redes sociales",

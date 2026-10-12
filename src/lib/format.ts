@@ -37,7 +37,14 @@ export function formatSeguimientoDueLabel(date: Date, now: Date = new Date()): s
   return `Venció hace ${Math.abs(days)} días`;
 }
 
-function startOfDay(date: Date): Date {
+/**
+ * Convención horaria (MID-18): el MVP asume un solo negocio en un solo huso
+ * horario (el del navegador), no equipos distribuidos en zonas distintas. Toda
+ * fecha de "vencimiento" (`seguimientos.vence`) se crea y se agrupa usando la
+ * hora local del navegador — nunca UTC ni la hora del servidor — y siempre con
+ * esta misma función, para que crear, agrupar y etiquetar usen el mismo criterio.
+ */
+export function startOfDay(date: Date): Date {
   const copy = new Date(date);
   copy.setHours(0, 0, 0, 0);
   return copy;

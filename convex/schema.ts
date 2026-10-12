@@ -28,6 +28,17 @@ export default defineSchema({
     canalOrigen: v.optional(
       v.union(v.literal("web"), v.literal("redes"), v.literal("email"), v.literal("whatsapp"))
     ),
+    // Opcional a propósito: así un documento preexistente sin este campo sigue
+    // siendo válido contra el esquema. La UI trata su ausencia como "nuevo_lead"
+    // (ver src/lib/constants.ts).
+    estado: v.optional(
+      v.union(
+        v.literal("nuevo_lead"),
+        v.literal("en_negociacion"),
+        v.literal("ganado"),
+        v.literal("perdido")
+      )
+    ),
     nota: v.optional(v.string()),
     creadoEn: v.number(),
   }).searchIndex("search_nombre", { searchField: "nombre" }),
