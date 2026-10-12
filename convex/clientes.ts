@@ -164,3 +164,57 @@ export const listar = query({
     }));
   },
 });
+
+/**
+ * Ficha de cliente (MID-13): a diferencia de `buscar`/`listar`, aquí sí se
+ * necesitan todos los campos (incluye nota, usada en la ficha) — es una
+ * lectura de un cliente puntual, no un listado masivo.
+ */
+export const obtener = query({
+  args: { id: v.id("clientes") },
+  handler: async (ctx, { id }) => {
+    await requireUsuario(ctx);
+    return await ctx.db.get(id);
+  },
+});
+
+/**
+ * Edición de la Ficha de cliente (MID-13): mismos campos y mismas reglas de
+ * validación que `crear` (nombre no vacío, al menos un medio de contacto,
+ * formato de email) — una persona no puede llegar a un estado inválido
+ * editando que no podría alcanzar creando. `estado` no es parte de los args:
+ * no se edita aquí, se recalcula solo a partir de las ventas (MID-22).
+ */
+export const editar = mutation({
+  args: {
+    id: v.id("clientes"),
+    nombre: v.string(),
+    telefono: v.optional(v.string()),
+    email: v.optional(v.string()),
+    empresa: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireUsuario(ctx);
+    const existente = await ctx.db.get(args.id);
+    if (!existente) {
+      throw new Error("El cliente no existe.");
+    }
+    const nombreLimpio = args.nombre.trim();
+    if (!nombreLimpio) {
+      throw new Error("El nombre del cliente no puede estar vacío.");
+    }
+    const telefonoLimpio = args.telefono?.trim();
+    const emailLimpio = args.email?.trim();
+    if (!telefonoLimpio && !emailLimpio) {
+      throw new Error("Agrega un teléfono o un email.");
+    }
+    validarEmail(emailLimpio);
+    const empresaLimpia = args.empresa?.trim();
+    await ctx.db.patch(args.id, {
+      nombre: nombreLimpio,
+      telefono: telefonoLimpio || undefined,
+      email: emailLimpio || undefined,
+      empresa: empresaLimpia || undefined,
+    });
+  },
+});

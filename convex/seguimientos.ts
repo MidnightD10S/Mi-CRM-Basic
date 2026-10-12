@@ -39,6 +39,35 @@ export const listarPendientes = query({
   },
 });
 
+/**
+ * Ficha de cliente (MID-19): seguimientos pendientes de un cliente puntual —
+ * distinto de `listarPendientes` (todos los del negocio, usado en Hoy). Se
+ * filtra `hecho` en memoria sobre `by_cliente` en vez de añadir un índice
+ * compuesto nuevo: el volumen por cliente es chico (MVP de negocio pequeño).
+ */
+export const listarPendientesPorCliente = query({
+  args: { clienteId: v.id("clientes") },
+  handler: async (ctx, { clienteId }) => {
+    await requireUsuario(ctx);
+    const seguimientos = await ctx.db
+      .query("seguimientos")
+      .withIndex("by_cliente", (q) => q.eq("clienteId", clienteId))
+      .collect();
+    const pendientes = seguimientos.filter((s) => !s.hecho).sort((a, b) => a.vence - b.vence);
+    return await Promise.all(
+      pendientes.map(async (seguimiento) => {
+        const responsable = await ctx.db.get(seguimiento.responsableId);
+        return {
+          _id: seguimiento._id,
+          accion: seguimiento.accion,
+          vence: seguimiento.vence,
+          responsable: responsable ? { nombre: responsable.nombre } : null,
+        };
+      })
+    );
+  },
+});
+
 export const crearTarea = mutation({
   args: {
     accion: v.string(),
