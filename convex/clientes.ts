@@ -11,16 +11,31 @@ import { v } from "convex/values";
 // Si el volumen creciera, paginar sería un cambio aparte.
 const LIMITE_BUSQUEDA = 20;
 
+// Chequeo simple de forma (no RFC 5322 completo) — suficiente para detectar
+// que alguien escribió un email mal formado, sin rechazar direcciones válidas
+// pero inusuales.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validarEmail(email: string | undefined): void {
+  if (email && !EMAIL_REGEX.test(email)) {
+    throw new Error("El email no tiene un formato válido.");
+  }
+}
+
 export const buscar = query({
   args: { texto: v.string() },
   handler: async (ctx, { texto }) => {
-    if (texto.trim() === "") {
-      return await ctx.db.query("clientes").order("desc").take(LIMITE_BUSQUEDA);
-    }
-    return await ctx.db
-      .query("clientes")
-      .withSearchIndex("search_nombre", (q) => q.search("nombre", texto))
-      .take(LIMITE_BUSQUEDA);
+    const resultados =
+      texto.trim() === ""
+        ? await ctx.db.query("clientes").order("desc").take(LIMITE_BUSQUEDA)
+        : await ctx.db
+            .query("clientes")
+            .withSearchIndex("search_nombre", (q) => q.search("nombre", texto))
+            .take(LIMITE_BUSQUEDA);
+    // Recorte de campos (hallazgo de auditoría): el selector de "Nueva tarea"
+    // (único llamador) solo usa `_id`/`nombre` — no hay motivo para devolver
+    // teléfono, email o nota de cada cliente a una query pública sin auth.
+    return resultados.map((cliente) => ({ _id: cliente._id, nombre: cliente.nombre }));
   },
 });
 
@@ -41,6 +56,7 @@ export const crearMinimo = mutation({
     }
     const telefonoLimpio = telefono?.trim();
     const emailLimpio = email?.trim();
+    validarEmail(emailLimpio);
     return await ctx.db.insert("clientes", {
       nombre: nombreLimpio,
       telefono: telefonoLimpio || undefined,
@@ -79,6 +95,7 @@ export const crear = mutation({
     if (!telefonoLimpio && !emailLimpio) {
       throw new Error("Agrega un teléfono o un email.");
     }
+    validarEmail(emailLimpio);
     const empresaLimpia = args.empresa?.trim();
     const notaLimpia = args.nota?.trim();
     return await ctx.db.insert("clientes", {

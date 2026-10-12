@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { Overlay } from "@/components/ui/overlay";
@@ -57,7 +57,8 @@ export function NuevoClienteOverlay({ open, onClose }: NuevoClienteOverlayProps)
   const tieneContacto = Boolean(telefono.trim() || email.trim());
   const puedeGuardar = Boolean(nombre.trim() && tieneContacto && !guardando);
 
-  async function guardar() {
+  async function guardar(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (!puedeGuardar || guardando) return;
     setGuardando(true);
     try {
@@ -79,14 +80,18 @@ export function NuevoClienteOverlay({ open, onClose }: NuevoClienteOverlayProps)
     }
   }
 
+  const mostrarErrorContacto = !tieneContacto && Boolean(nombre.trim() || telefono || email);
+  const contactoErrorId = "contacto-error";
+
   return (
     <Overlay open={open} onClose={cerrar} title="Nuevo cliente">
-      <div className="flex flex-col gap-4">
+      <form className="flex flex-col gap-4" onSubmit={guardar}>
         <Input
           label="Nombre"
           placeholder="Nombre del cliente"
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
+          required
         />
 
         <div className="flex flex-col gap-1.5">
@@ -96,6 +101,7 @@ export function NuevoClienteOverlay({ open, onClose }: NuevoClienteOverlayProps)
               placeholder="Opcional si hay email"
               value={telefono}
               onChange={(e) => setTelefono(e.target.value)}
+              aria-describedby={mostrarErrorContacto ? contactoErrorId : undefined}
             />
             <Input
               label="Email"
@@ -103,10 +109,11 @@ export function NuevoClienteOverlay({ open, onClose }: NuevoClienteOverlayProps)
               placeholder="Opcional si hay teléfono"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              aria-describedby={mostrarErrorContacto ? contactoErrorId : undefined}
             />
           </div>
-          {!tieneContacto && (nombre.trim() || telefono || email) && (
-            <p className="text-[13px] text-(--color-error-text)">
+          {mostrarErrorContacto && (
+            <p id={contactoErrorId} role="alert" className="text-[13px] text-(--color-error-text)">
               Agrega un teléfono o un email.
             </p>
           )}
@@ -149,10 +156,10 @@ export function NuevoClienteOverlay({ open, onClose }: NuevoClienteOverlayProps)
           />
         </div>
 
-        <Button onClick={guardar} disabled={!puedeGuardar}>
+        <Button type="submit" disabled={!puedeGuardar}>
           {guardando ? "Guardando…" : "Guardar"}
         </Button>
-      </div>
+      </form>
     </Overlay>
   );
 }

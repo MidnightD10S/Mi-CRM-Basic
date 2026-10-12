@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "convex/react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Plus, Search, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -117,17 +117,14 @@ function FilaCliente({
 }: {
   cliente: { _id: string; nombre: string; estado?: "nuevo_lead" | "en_negociacion" | "ganado" | "perdido"; creadoEn: number };
 }) {
-  const router = useRouter();
   const estado = estadoClienteOFallback(cliente.estado);
   const estadoInfo = ESTADOS_CLIENTE[estado];
 
   return (
     <li>
-      <button
-        type="button"
-        className="w-full text-left"
-        onClick={() => router.push(`/clientes/${cliente._id}`)}
-      >
+      {/* Link (no button+div): es una navegación real, no una acción — permite
+          abrir en pestaña nueva, Ctrl/Cmd-click, etc. */}
+      <Link href={`/clientes/${cliente._id}`} className="block">
         <Card className="flex flex-col gap-1.5 transition-colors hover:bg-(--color-surface-2)">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[15px] font-medium">{cliente.nombre}</span>
@@ -140,7 +137,7 @@ function FilaCliente({
             Cliente desde {new Date(cliente.creadoEn).toLocaleDateString("es-ES")}
           </span>
         </Card>
-      </button>
+      </Link>
     </li>
   );
 }
