@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { OverlayPendiente } from "@/components/ui/overlay-pendiente";
 import { useToast } from "@/components/ui/toast";
 import { NuevaTareaOverlay } from "./nueva-tarea-overlay";
+import { NuevoClienteOverlay } from "../clientes/nuevo-cliente-overlay";
 import { ESTADOS_CLIENTE, estadoClienteOFallback } from "@/lib/constants";
 import { formatSeguimientoDueLabel, startOfDay } from "@/lib/format";
 import { api, type Doc, type Id } from "@/lib/convex-generated";
@@ -160,12 +161,13 @@ export default function HoyPage() {
         issue="MID-20 / MID-21"
         descripcion="Registrar una venta u oportunidad (concepto, importe, estado) desde un selector de cliente."
       />
-      <OverlayPendiente
+      {/* MID-11 ya está construido (ver src/app/(app)/clientes/nuevo-cliente-overlay.tsx)
+          — este acceso rápido había quedado apuntando al aviso de "pantalla
+          pendiente" en vez del formulario real; se corrige reutilizando el
+          mismo overlay que usa la pantalla Clientes. */}
+      <NuevoClienteOverlay
         open={accesoAbierto === "nuevo-cliente"}
         onClose={() => setAccesoAbierto(null)}
-        titulo="Nuevo cliente"
-        issue="MID-11"
-        descripcion="Alta completa de cliente (nombre, empresa, teléfono, email, canal de origen, nota)."
       />
     </div>
   );
