@@ -50,3 +50,98 @@ export const crearMinimo = mutation({
     });
   },
 });
+
+/**
+ * Alta completa (MID-11): además del alta mínima de arriba, admite empresa,
+ * canal de origen y nota, y exige al menos un medio de contacto (teléfono o
+ * email) — regla central del issue, validada aquí porque la función es
+ * pública (sin auth todavía, TODO(MID-7) arriba) y no puede depender solo de
+ * que la UI la respete.
+ */
+export const crear = mutation({
+  args: {
+    nombre: v.string(),
+    telefono: v.optional(v.string()),
+    email: v.optional(v.string()),
+    empresa: v.optional(v.string()),
+    canalOrigen: v.optional(
+      v.union(v.literal("web"), v.literal("redes"), v.literal("email"), v.literal("whatsapp"))
+    ),
+    nota: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const nombreLimpio = args.nombre.trim();
+    if (!nombreLimpio) {
+      throw new Error("El nombre del cliente no puede estar vacío.");
+    }
+    const telefonoLimpio = args.telefono?.trim();
+    const emailLimpio = args.email?.trim();
+    if (!telefonoLimpio && !emailLimpio) {
+      throw new Error("Agrega un teléfono o un email.");
+    }
+    const empresaLimpia = args.empresa?.trim();
+    const notaLimpia = args.nota?.trim();
+    return await ctx.db.insert("clientes", {
+      nombre: nombreLimpio,
+      telefono: telefonoLimpio || undefined,
+      email: emailLimpio || undefined,
+      empresa: empresaLimpia || undefined,
+      canalOrigen: args.canalOrigen,
+      nota: notaLimpia || undefined,
+      estado: "nuevo_lead",
+      creadoEn: Date.now(),
+    });
+  },
+});
+
+// Mismo criterio de límite explícito que el resto del archivo: MVP de negocio
+// pequeño (decenas de clientes, no miles). "Lista completa" en `listar`
+// significa "completa dentro de este límite", no una garantía ilimitada.
+const LIMITE_LISTADO = 500;
+
+function soloDigitos(valor: string): string {
+  return valor.replace(/[^0-9]/g, "");
+}
+
+/**
+ * Lista con buscador de MID-12 — distinta de `buscar` (arriba), que solo
+ * busca por nombre vía índice de búsqueda y se usa en el selector de "Nueva
+ * tarea". Esta filtra en memoria por nombre, email y teléfono (el teléfono
+ * ignora espacios/símbolos, comparando solo dígitos) sobre los `LIMITE_LISTADO`
+ * clientes más recientes — alcance acotado a propósito al tamaño del negocio,
+ * sin añadir más índices de búsqueda.
+ */
+export const listar = query({
+  args: { texto: v.string() },
+  handler: async (ctx, { texto }) => {
+    const todos = await ctx.db.query("clientes").order("desc").take(LIMITE_LISTADO);
+    const textoLimpio = texto.trim().toLowerCase();
+    const textoDigitos = soloDigitos(texto);
+
+    const coincidentes = !textoLimpio
+      ? todos
+      : todos.filter((cliente) => {
+          const nombreCoincide = cliente.nombre.toLowerCase().includes(textoLimpio);
+          const emailCoincide = cliente.email?.toLowerCase().includes(textoLimpio) ?? false;
+          // Guarda crítica: sin dígitos en el texto buscado, NO se compara por
+          // teléfono. `"".includes("")` es `true`, así que sin esta guarda
+          // cualquier búsqueda por nombre/email (sin dígitos) "coincidiría"
+          // también con todo cliente que tuviera teléfono, rompiendo el filtro.
+          const telefonoCoincide =
+            textoDigitos.length > 0 &&
+            Boolean(cliente.telefono && soloDigitos(cliente.telefono).includes(textoDigitos));
+          return nombreCoincide || emailCoincide || telefonoCoincide;
+        });
+
+    // Recorte de campos: el filtro necesita telefono/email del documento
+    // completo, pero no hay motivo para exponerlos a cualquier llamador de
+    // esta query pública (sin auth todavía) — la lista solo necesita nombre,
+    // estado y fecha de alta. Mismo criterio ya aplicado en usuarios.ts.
+    return coincidentes.map((cliente) => ({
+      _id: cliente._id,
+      nombre: cliente.nombre,
+      estado: cliente.estado,
+      creadoEn: cliente.creadoEn,
+    }));
+  },
+});
