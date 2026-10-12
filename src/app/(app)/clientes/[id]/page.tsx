@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { OverlayPendiente } from "@/components/ui/overlay-pendiente";
 import { EditarClienteOverlay } from "./editar-cliente-overlay";
 import { CANALES_ORIGEN, ESTADOS_CLIENTE, estadoClienteOFallback } from "@/lib/constants";
+import { startOfDay } from "@/lib/format";
 import { api, type Id } from "@/lib/convex-generated";
 
 type AccesoRapido = "anotar-interaccion" | "programar-seguimiento" | "registrar-venta" | null;
@@ -56,7 +57,10 @@ export default function FichaClientePage() {
 
   const estado = estadoClienteOFallback(cliente.estado);
   const estadoInfo = ESTADOS_CLIENTE[estado];
-  const ahora = new Date().getTime();
+  // Igual que en Hoy (MID-18): comparar por inicio de día local, no por el
+  // timestamp crudo — un seguimiento que vence hoy no debe verse "Atrasado"
+  // solo porque ya pasó la hora exacta en que se creó.
+  const hoyInicio = startOfDay(new Date()).getTime();
 
   return (
     <div className="mx-auto flex max-w-[860px] flex-col gap-5 p-5 pb-24">
@@ -161,7 +165,7 @@ export default function FichaClientePage() {
               <FilaSeguimientoCliente
                 key={seguimiento._id}
                 seguimiento={seguimiento}
-                atrasado={seguimiento.vence < ahora}
+                atrasado={startOfDay(new Date(seguimiento.vence)).getTime() < hoyInicio}
               />
             ))}
           </ul>
