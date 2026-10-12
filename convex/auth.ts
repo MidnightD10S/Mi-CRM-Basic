@@ -19,4 +19,14 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       },
     }),
   ],
+  jwt: {
+    // El JWT de Convex Auth NO incluye el email por defecto (solo trae
+    // `sub`) — sin esto, `ctx.auth.getUserIdentity().email` siempre es
+    // `undefined` y `requireUsuario`/`usuarios.yo()` nunca encuentran la
+    // fila de `usuarios` correspondiente, aunque la sesión sí sea válida.
+    customClaims: async (ctx, { userId }) => {
+      const user = await ctx.db.get(userId);
+      return { email: user?.email };
+    },
+  },
 });
