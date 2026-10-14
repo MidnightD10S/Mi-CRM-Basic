@@ -16,11 +16,6 @@ import { requireUsuario } from "./authHelpers";
 // MVP de negocio pequeño (decenas de ventas por cliente, no miles).
 const LIMITE_HISTORIAL = 100;
 
-// Tope arbitrario pero generoso para un negocio pequeño (ver LIMITE_HISTORIAL):
-// no es una regla de negocio real, solo una cota de sanidad contra errores de
-// tipeo o de integración (p. ej. mandar centavos en vez de dólares).
-const IMPORTE_MAXIMO = 1_000_000;
-
 /**
  * Hallazgo de auditoría: `importe > 0` no bastaba — una llamada directa a la
  * mutation (sin pasar por la máscara de centavos del overlay) podía mandar
@@ -29,12 +24,21 @@ const IMPORTE_MAXIMO = 1_000_000;
  * valida la precisión de centavos en el servidor, no solo en la UI — mismo
  * criterio que el resto de validaciones de este archivo (MID-7: no confiar
  * en que el cliente respete el contrato).
+ *
+ * Segunda ronda de auditoría: un tope en dólares (ej. "$1,000,000") es una
+ * decisión de producto que nadie pidió y que podría bloquear una venta
+ * grande legítima — se reemplaza por `Number.isSafeInteger(centavos)`, una
+ * cota puramente técnica (protege contra `Infinity`/`NaN`/valores fuera del
+ * rango entero seguro de JS), sin inventar un límite de negocio.
  */
 function validarImporte(importe: number): void {
-  if (!(importe > 0) || importe > IMPORTE_MAXIMO) {
-    throw new Error("El importe debe ser mayor a cero y menor a $1,000,000.");
+  if (!(importe > 0)) {
+    throw new Error("El importe debe ser mayor a cero.");
   }
   const centavos = Math.round(importe * 100);
+  if (!Number.isSafeInteger(centavos)) {
+    throw new Error("El importe no es un valor válido.");
+  }
   if (Math.abs(importe * 100 - centavos) > 1e-6) {
     throw new Error("El importe no puede tener más de dos decimales.");
   }
