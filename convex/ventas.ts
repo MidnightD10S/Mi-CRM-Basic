@@ -25,23 +25,31 @@ const LIMITE_HISTORIAL = 100;
  * criterio que el resto de validaciones de este archivo (MID-7: no confiar
  * en que el cliente respete el contrato).
  *
- * Segunda ronda de auditoría: un tope en dólares (ej. "$1,000,000") es una
- * decisión de producto que nadie pidió y que podría bloquear una venta
- * grande legítima — se reemplaza por `Number.isSafeInteger(centavos)`, una
- * cota puramente técnica (protege contra `Infinity`/`NaN`/valores fuera del
- * rango entero seguro de JS), sin inventar un límite de negocio.
+ * Segunda ronda: un tope en dólares (ej. "$1,000,000") es una decisión de
+ * producto que nadie pidió — se reemplaza por `Number.isSafeInteger(centavos)`,
+ * una cota puramente técnica, sin inventar un límite de negocio.
+ *
+ * Tercera ronda: `importe > 0` seguía dejando pasar un borde — un `importe`
+ * positivo pero menor a medio centavo (ej. `1e-9`) redondea a `centavos = 0`,
+ * dentro de la tolerancia de punto flotante, y se guardaba tal cual, no su
+ * versión normalizada — el historial lo mostraría como `$0.00`, violando el
+ * contrato de "al menos un centavo". Por eso esta función ahora **devuelve**
+ * el importe ya normalizado (`centavos / 100`) en vez de solo validar: lo que
+ * se guarda en `ventas.importe` es exactamente lo que `centavos` representa,
+ * nunca el valor crudo que mandó quien llamó a la mutation.
  */
-function validarImporte(importe: number): void {
+function normalizarImporte(importe: number): number {
   if (!(importe > 0)) {
     throw new Error("El importe debe ser mayor a cero.");
   }
   const centavos = Math.round(importe * 100);
-  if (!Number.isSafeInteger(centavos)) {
-    throw new Error("El importe no es un valor válido.");
+  if (!Number.isSafeInteger(centavos) || centavos < 1) {
+    throw new Error("El importe debe ser de al menos un centavo.");
   }
   if (Math.abs(importe * 100 - centavos) > 1e-6) {
     throw new Error("El importe no puede tener más de dos decimales.");
   }
+  return centavos / 100;
 }
 
 /**
@@ -136,7 +144,7 @@ export const crear = mutation({
     if (!conceptoLimpio) {
       throw new Error("El concepto de la venta no puede estar vacío.");
     }
-    validarImporte(args.importe);
+    const importe = normalizarImporte(args.importe);
     const cliente = await ctx.db.get(args.clienteId);
     if (!cliente) {
       throw new Error("El cliente no existe.");
@@ -144,7 +152,7 @@ export const crear = mutation({
     const id = await ctx.db.insert("ventas", {
       clienteId: args.clienteId,
       concepto: conceptoLimpio,
-      importe: args.importe,
+      importe,
       estado: args.estado,
       fecha: args.fecha,
       autorId: usuario._id,
