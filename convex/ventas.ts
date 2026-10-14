@@ -16,6 +16,30 @@ import { requireUsuario } from "./authHelpers";
 // MVP de negocio pequeño (decenas de ventas por cliente, no miles).
 const LIMITE_HISTORIAL = 100;
 
+// Tope arbitrario pero generoso para un negocio pequeño (ver LIMITE_HISTORIAL):
+// no es una regla de negocio real, solo una cota de sanidad contra errores de
+// tipeo o de integración (p. ej. mandar centavos en vez de dólares).
+const IMPORTE_MAXIMO = 1_000_000;
+
+/**
+ * Hallazgo de auditoría: `importe > 0` no bastaba — una llamada directa a la
+ * mutation (sin pasar por la máscara de centavos del overlay) podía mandar
+ * más de dos decimales (ej. 1.234), guardando un valor que `formatCurrency`
+ * redondearía al mostrarlo, desincronizando lo guardado de lo mostrado. Se
+ * valida la precisión de centavos en el servidor, no solo en la UI — mismo
+ * criterio que el resto de validaciones de este archivo (MID-7: no confiar
+ * en que el cliente respete el contrato).
+ */
+function validarImporte(importe: number): void {
+  if (!(importe > 0) || importe > IMPORTE_MAXIMO) {
+    throw new Error("El importe debe ser mayor a cero y menor a $1,000,000.");
+  }
+  const centavos = Math.round(importe * 100);
+  if (Math.abs(importe * 100 - centavos) > 1e-6) {
+    throw new Error("El importe no puede tener más de dos decimales.");
+  }
+}
+
 /**
  * MID-22: recalcula el Estado del cliente cada vez que se registra una venta.
  * Usa existencia indexada (`by_cliente_estado`, `.first()`) en vez de traer
@@ -108,9 +132,7 @@ export const crear = mutation({
     if (!conceptoLimpio) {
       throw new Error("El concepto de la venta no puede estar vacío.");
     }
-    if (!(args.importe > 0)) {
-      throw new Error("El importe debe ser mayor a cero.");
-    }
+    validarImporte(args.importe);
     const cliente = await ctx.db.get(args.clienteId);
     if (!cliente) {
       throw new Error("El cliente no existe.");
