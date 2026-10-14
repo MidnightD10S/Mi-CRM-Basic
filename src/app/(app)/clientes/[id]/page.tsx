@@ -19,7 +19,15 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { OverlayPendiente } from "@/components/ui/overlay-pendiente";
 import { EditarClienteOverlay } from "./editar-cliente-overlay";
-import { CANALES_ORIGEN, ESTADOS_CLIENTE, estadoClienteOFallback } from "@/lib/constants";
+import { ProgramarSeguimientoOverlay } from "./programar-seguimiento-overlay";
+import { AnotarInteraccionOverlay } from "../anotar-interaccion-overlay";
+import {
+  CANALES_ORIGEN,
+  ESTADOS_CLIENTE,
+  ICONOS_CANAL_INTERACCION,
+  estadoClienteOFallback,
+  type CanalInteraccion,
+} from "@/lib/constants";
 import { startOfDay } from "@/lib/format";
 import { api, type Id } from "@/lib/convex-generated";
 
@@ -31,6 +39,7 @@ export default function FichaClientePage() {
 
   const cliente = useQuery(api.clientes.obtener, { id: clienteId });
   const seguimientos = useQuery(api.seguimientos.listarPendientesPorCliente, { clienteId });
+  const historial = useQuery(api.interacciones.listarPorCliente, { clienteId });
 
   const [editando, setEditando] = useState(false);
   const [accesoAbierto, setAccesoAbierto] = useState<AccesoRapido>(null);
@@ -172,17 +181,27 @@ export default function FichaClientePage() {
         )}
       </section>
 
-      {/* Historial cronológico (MID-19): depende de que existan interacciones
-          (MID-14/MID-16) y ventas (MID-20/MID-21), ninguna construida todavía
-          — hasta entonces, esta sección siempre muestra el estado vacío
-          documentado en el issue, nunca una lista real. */}
+      {/* Historial cronológico (MID-19): la parte de interacciones ya está
+          montada (MID-14/MID-16); solo falta la parte de ventas (Fase 4,
+          MID-20/MID-21) — hasta entonces, el estado vacío solo aparece si no
+          hay ninguna interacción registrada. */}
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-(--color-text-muted)">Historial</h2>
-        <EmptyState
-          icon={Clock}
-          title="Sin actividad todavía"
-          description="Las interacciones y ventas que se registren con este cliente aparecerán aquí."
-        />
+        {historial === undefined ? (
+          <p className="text-[14px] text-(--color-text-subtle)">Cargando…</p>
+        ) : historial.length === 0 ? (
+          <EmptyState
+            icon={Clock}
+            title="Sin actividad todavía"
+            description="Las interacciones y ventas que se registren con este cliente aparecerán aquí."
+          />
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {historial.map((interaccion) => (
+              <FilaInteraccion key={interaccion._id} interaccion={interaccion} />
+            ))}
+          </ul>
+        )}
       </section>
 
       {/* `key` fuerza un remount cada vez que se abre: así el formulario
@@ -195,19 +214,17 @@ export default function FichaClientePage() {
         cliente={cliente}
       />
 
-      <OverlayPendiente
+      <AnotarInteraccionOverlay
+        key={accesoAbierto === "anotar-interaccion" ? "abierto" : "cerrado"}
         open={accesoAbierto === "anotar-interaccion"}
         onClose={() => setAccesoAbierto(null)}
-        titulo="Anotar interacción"
-        issue="MID-16"
-        descripcion="Registrar una interacción con este cliente (llamada, email, WhatsApp, en persona)."
+        clientePreseleccionado={{ id: clienteId, nombre: cliente.nombre }}
       />
-      <OverlayPendiente
+      <ProgramarSeguimientoOverlay
+        key={accesoAbierto === "programar-seguimiento" ? "abierto" : "cerrado"}
         open={accesoAbierto === "programar-seguimiento"}
         onClose={() => setAccesoAbierto(null)}
-        titulo="Programar seguimiento"
-        issue="MID-17"
-        descripcion="Programar un seguimiento para este cliente, con posibilidad de reasignar el responsable."
+        clienteId={clienteId}
       />
       <OverlayPendiente
         open={accesoAbierto === "registrar-venta"}
@@ -239,6 +256,37 @@ function FilaSeguimientoCliente({
           <span>·</span>
           <span>{seguimiento.responsable?.nombre ?? "Sin responsable"}</span>
         </div>
+      </Card>
+    </li>
+  );
+}
+
+/**
+ * MID-19: copy exacto "ícono según canal + nota + 'Registrado por [autor]'".
+ */
+function FilaInteraccion({
+  interaccion,
+}: {
+  interaccion: {
+    _id: string;
+    tipo: CanalInteraccion;
+    nota: string;
+    fecha: number;
+    autor: { nombre: string } | null;
+  };
+}) {
+  const Icono = ICONOS_CANAL_INTERACCION[interaccion.tipo];
+  return (
+    <li>
+      <Card className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2 text-[13px] text-(--color-text-subtle)">
+          <Icono size={15} strokeWidth={1.5} />
+          <span>{new Date(interaccion.fecha).toLocaleDateString("es-ES")}</span>
+        </div>
+        <p className="text-[14px] text-(--color-text)">{interaccion.nota}</p>
+        <p className="text-[13px] text-(--color-text-subtle)">
+          Registrado por {interaccion.autor?.nombre ?? "Autor no disponible"}
+        </p>
       </Card>
     </li>
   );

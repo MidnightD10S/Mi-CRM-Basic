@@ -17,13 +17,18 @@ export const listarPendientes = query({
   args: {},
   handler: async (ctx) => {
     await requireUsuario(ctx);
-    const seguimientos = await ctx.db
+    // Se pide uno de más que LIMITE_PENDIENTES para saber si hay seguimientos
+    // pendientes más allá del corte (los que vencen más tarde, al estar
+    // ordenados `asc` por `vence`) sin necesitar un `count` aparte.
+    const encontrados = await ctx.db
       .query("seguimientos")
       .withIndex("by_hecho_vence", (q) => q.eq("hecho", false))
       .order("asc")
-      .take(LIMITE_PENDIENTES);
+      .take(LIMITE_PENDIENTES + 1);
+    const truncado = encontrados.length > LIMITE_PENDIENTES;
+    const seguimientos = encontrados.slice(0, LIMITE_PENDIENTES);
 
-    return await Promise.all(
+    const items = await Promise.all(
       seguimientos.map(async (seguimiento) => {
         const [cliente, responsable] = await Promise.all([
           ctx.db.get(seguimiento.clienteId),
@@ -36,6 +41,8 @@ export const listarPendientes = query({
         };
       })
     );
+
+    return { items, truncado };
   },
 });
 
@@ -68,26 +75,47 @@ export const listarPendientesPorCliente = query({
   },
 });
 
+/**
+ * MID-17/MID-18: "Nueva tarea" (Hoy) y "Programar seguimiento" (Ficha) son
+ * dos UIs distintas para la misma entidad — no se fusionan sus campos, pero
+ * comparten esta mutation. `responsableId` es opcional para no romper el
+ * flujo existente de Hoy (nunca lo manda, sigue autoasignando a la sesión).
+ * Cuando la Ficha lo manda (reasignación a la otra persona del equipo), se
+ * valida contra `usuarios` en vez de confiar en el tipo `v.id` — ese tipo
+ * solo valida la forma del string, no que el documento exista (MID-7: no
+ * confiar en ids que manda el cliente sin verificarlos). Por el mismo motivo
+ * se valida que `clienteId` exista.
+ */
 export const crearTarea = mutation({
   args: {
     accion: v.string(),
     clienteId: v.id("clientes"),
     vence: v.number(),
+    responsableId: v.optional(v.id("usuarios")),
   },
   handler: async (ctx, args) => {
-    // MID-7: el responsable es quien tiene la sesión, no un id que mande el
-    // cliente — evita crear una tarea a nombre de otra persona con una
-    // sesión propia válida.
     const usuario = await requireUsuario(ctx);
     const accionLimpia = args.accion.trim();
     if (!accionLimpia) {
       throw new Error("El título de la tarea no puede estar vacío.");
     }
+    const cliente = await ctx.db.get(args.clienteId);
+    if (!cliente) {
+      throw new Error("El cliente no existe.");
+    }
+    let responsableId = usuario._id;
+    if (args.responsableId) {
+      const responsable = await ctx.db.get(args.responsableId);
+      if (!responsable) {
+        throw new Error("El responsable elegido no existe.");
+      }
+      responsableId = args.responsableId;
+    }
     return await ctx.db.insert("seguimientos", {
       accion: accionLimpia,
       clienteId: args.clienteId,
       vence: args.vence,
-      responsableId: usuario._id,
+      responsableId,
       hecho: false,
     });
   },
