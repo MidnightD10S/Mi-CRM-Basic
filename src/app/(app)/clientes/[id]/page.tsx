@@ -19,8 +19,15 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { OverlayPendiente } from "@/components/ui/overlay-pendiente";
 import { EditarClienteOverlay } from "./editar-cliente-overlay";
-import { CANALES_ORIGEN, ESTADOS_CLIENTE, estadoClienteOFallback } from "@/lib/constants";
-import { startOfDay } from "@/lib/format";
+import { RegistrarVentaOverlay } from "../registrar-venta-overlay";
+import {
+  CANALES_ORIGEN,
+  ESTADOS_CLIENTE,
+  ESTADOS_VENTA,
+  estadoClienteOFallback,
+  type EstadoVenta,
+} from "@/lib/constants";
+import { formatCurrency, startOfDay } from "@/lib/format";
 import { api, type Id } from "@/lib/convex-generated";
 
 type AccesoRapido = "anotar-interaccion" | "programar-seguimiento" | "registrar-venta" | null;
@@ -31,6 +38,7 @@ export default function FichaClientePage() {
 
   const cliente = useQuery(api.clientes.obtener, { id: clienteId });
   const seguimientos = useQuery(api.seguimientos.listarPendientesPorCliente, { clienteId });
+  const ventas = useQuery(api.ventas.listarPorCliente, { clienteId });
 
   const [editando, setEditando] = useState(false);
   const [accesoAbierto, setAccesoAbierto] = useState<AccesoRapido>(null);
@@ -172,17 +180,28 @@ export default function FichaClientePage() {
         )}
       </section>
 
-      {/* Historial cronológico (MID-19): depende de que existan interacciones
-          (MID-14/MID-16) y ventas (MID-20/MID-21), ninguna construida todavía
-          — hasta entonces, esta sección siempre muestra el estado vacío
-          documentado en el issue, nunca una lista real. */}
+      {/* Historial cronológico (MID-19): la parte de ventas ya está montada
+          (MID-20/MID-21). La parte de interacciones (MID-14/MID-16) se
+          construye en una rama distinta (una rama por tarea) — hasta que esa
+          otra se mergee, este historial solo muestra ventas; el merge de
+          ambas listas por fecha queda para cuando las dos ramas se integren. */}
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-(--color-text-muted)">Historial</h2>
-        <EmptyState
-          icon={Clock}
-          title="Sin actividad todavía"
-          description="Las interacciones y ventas que se registren con este cliente aparecerán aquí."
-        />
+        {ventas === undefined ? (
+          <p className="text-[14px] text-(--color-text-subtle)">Cargando…</p>
+        ) : ventas.length === 0 ? (
+          <EmptyState
+            icon={Clock}
+            title="Sin actividad todavía"
+            description="Las interacciones y ventas que se registren con este cliente aparecerán aquí."
+          />
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {ventas.map((venta) => (
+              <FilaVenta key={venta._id} venta={venta} />
+            ))}
+          </ul>
+        )}
       </section>
 
       {/* `key` fuerza un remount cada vez que se abre: así el formulario
@@ -209,14 +228,37 @@ export default function FichaClientePage() {
         issue="MID-17"
         descripcion="Programar un seguimiento para este cliente, con posibilidad de reasignar el responsable."
       />
-      <OverlayPendiente
+      <RegistrarVentaOverlay
+        key={accesoAbierto === "registrar-venta" ? "abierto" : "cerrado"}
         open={accesoAbierto === "registrar-venta"}
         onClose={() => setAccesoAbierto(null)}
-        titulo="Registrar venta"
-        issue="MID-20 / MID-21"
-        descripcion="Registrar una venta u oportunidad (concepto, importe, estado) para este cliente."
+        clientePreseleccionado={{ id: clienteId, nombre: cliente.nombre }}
       />
     </div>
+  );
+}
+
+function FilaVenta({
+  venta,
+}: {
+  venta: { _id: string; concepto: string; importe: number; estado: EstadoVenta; fecha: number };
+}) {
+  const estadoInfo = ESTADOS_VENTA[venta.estado];
+  return (
+    <li>
+      <Card className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Badge tone={estadoInfo.tone}>{estadoInfo.label}</Badge>
+          <span className="text-[14px] font-medium text-(--color-text)">
+            {formatCurrency(venta.importe)}
+          </span>
+        </div>
+        <p className="text-[14px] text-(--color-text)">{venta.concepto}</p>
+        <span className="text-[13px] text-(--color-text-subtle)">
+          {new Date(venta.fecha).toLocaleDateString("es-ES")}
+        </span>
+      </Card>
+    </li>
   );
 }
 
