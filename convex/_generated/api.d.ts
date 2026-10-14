@@ -12,6 +12,7 @@ import type * as auth from "../auth.js";
 import type * as authHelpers from "../authHelpers.js";
 import type * as clientes from "../clientes.js";
 import type * as http from "../http.js";
+import type * as interacciones from "../interacciones.js";
 import type * as seguimientos from "../seguimientos.js";
 import type * as usuarios from "../usuarios.js";
 
@@ -26,6 +27,7 @@ declare const fullApi: ApiFromModules<{
   authHelpers: typeof authHelpers;
   clientes: typeof clientes;
   http: typeof http;
+  interacciones: typeof interacciones;
   seguimientos: typeof seguimientos;
   usuarios: typeof usuarios;
 }>;
