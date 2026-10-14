@@ -8,13 +8,18 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { OverlayPendiente } from "@/components/ui/overlay-pendiente";
 import { useToast } from "@/components/ui/toast";
 import { NuevaTareaOverlay } from "./nueva-tarea-overlay";
 import { NuevoClienteOverlay } from "../clientes/nuevo-cliente-overlay";
+import { AnotarInteraccionOverlay } from "../clientes/anotar-interaccion-overlay";
 import { RegistrarVentaOverlay } from "../clientes/registrar-venta-overlay";
-import { ESTADOS_CLIENTE, estadoClienteOFallback } from "@/lib/constants";
-import { formatSeguimientoDueLabel, startOfDay } from "@/lib/format";
+import {
+  ESTADOS_CLIENTE,
+  ICONOS_CANAL_INTERACCION,
+  estadoClienteOFallback,
+  type CanalInteraccion,
+} from "@/lib/constants";
+import { formatRelativePast, formatSeguimientoDueLabel, startOfDay } from "@/lib/format";
 import { api, type Doc, type Id } from "@/lib/convex-generated";
 
 type SeguimientoPendiente = {
@@ -31,7 +36,8 @@ type AccesoRapido = "nueva-tarea" | "anotar-interaccion" | "registrar-venta" | "
 export default function HoyPage() {
   // La sesión ya está garantizada "lista" acá — RequireAuth (en el layout de
   // (app)) no renderiza children hasta que lo esté (ver MID-7).
-  const seguimientos = useQuery(api.seguimientos.listarPendientes);
+  const pendientes = useQuery(api.seguimientos.listarPendientes);
+  const recientes = useQuery(api.interacciones.listarRecientes);
   const marcarHecho = useMutation(api.seguimientos.marcarHecho);
   const deshacerHecho = useMutation(api.seguimientos.deshacerHecho);
   const { show } = useToast();
@@ -67,7 +73,7 @@ export default function HoyPage() {
     }
   }
 
-  if (seguimientos === undefined) {
+  if (pendientes === undefined) {
     return (
       <div className="mx-auto flex max-w-[860px] flex-col gap-5 p-5">
         <p className="text-[14px] text-(--color-text-subtle)">Cargando…</p>
@@ -75,6 +81,7 @@ export default function HoyPage() {
     );
   }
 
+  const seguimientos = pendientes.items;
   const visibles = seguimientos.filter((s) => !ocultosOptimistas.has(s._id));
   const hoyInicio = startOfDay(new Date()).getTime();
 
@@ -141,19 +148,46 @@ export default function HoyPage() {
           <GrupoSeguimientos titulo="Atrasados" items={atrasados} onCompletar={completar} destacado />
           <GrupoSeguimientos titulo="Para hoy" items={paraHoy} onCompletar={completar} />
           <GrupoSeguimientos titulo="Próximas" items={proximas} onCompletar={completar} />
+          {pendientes.truncado && (
+            <p className="text-[13px] text-(--color-text-subtle)">
+              Mostrando los {seguimientos.length} seguimientos más próximos a vencer. Hay más
+              pendientes además de estos — completa algunos para ver el resto.
+            </p>
+          )}
         </div>
       )}
+
+      {/* Actividad reciente: feed de interacciones de todo el negocio (no
+          solo las propias), mismo criterio que los seguimientos pendientes
+          de arriba (MID-18) — pedido explícito del usuario al definir el
+          alcance de MID-16 en Hoy. */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-(--color-text-muted)">Actividad reciente</h2>
+        {recientes === undefined ? (
+          <p className="text-[14px] text-(--color-text-subtle)">Cargando…</p>
+        ) : recientes.length === 0 ? (
+          <Card>
+            <p className="text-[14px] text-(--color-text-subtle)">
+              Todavía no hay interacciones registradas.
+            </p>
+          </Card>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {recientes.map((interaccion) => (
+              <FilaInteraccionReciente key={interaccion._id} interaccion={interaccion} />
+            ))}
+          </ul>
+        )}
+      </section>
 
       <NuevaTareaOverlay
         open={accesoAbierto === "nueva-tarea"}
         onClose={() => setAccesoAbierto(null)}
       />
-      <OverlayPendiente
+      <AnotarInteraccionOverlay
+        key={accesoAbierto === "anotar-interaccion" ? "abierto" : "cerrado"}
         open={accesoAbierto === "anotar-interaccion"}
         onClose={() => setAccesoAbierto(null)}
-        titulo="Anotar interacción"
-        issue="MID-16"
-        descripcion="Registrar una interacción con un cliente (llamada, email, WhatsApp, en persona) desde un selector de cliente."
       />
       <RegistrarVentaOverlay
         key={accesoAbierto === "registrar-venta" ? "abierto" : "cerrado"}
@@ -245,6 +279,48 @@ function FilaSeguimiento({
             </div>
           </button>
         </div>
+      </Card>
+    </li>
+  );
+}
+
+function FilaInteraccionReciente({
+  interaccion,
+}: {
+  interaccion: {
+    _id: string;
+    tipo: CanalInteraccion;
+    nota: string;
+    fecha: number;
+    clienteId: Id<"clientes">;
+    cliente: { nombre: string } | null;
+    autor: { nombre: string } | null;
+  };
+}) {
+  const router = useRouter();
+  const Icono = ICONOS_CANAL_INTERACCION[interaccion.tipo];
+
+  return (
+    <li>
+      <Card>
+        <button
+          type="button"
+          className="flex w-full flex-col gap-1 text-left"
+          onClick={() => router.push(`/clientes/${interaccion.clienteId}`)}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <Icono size={15} strokeWidth={1.5} className="text-(--color-text-subtle)" />
+            <span className="text-[15px] font-medium">
+              {interaccion.cliente?.nombre ?? "Cliente eliminado"}
+            </span>
+          </div>
+          <p className="truncate text-[14px] text-(--color-text)">{interaccion.nota}</p>
+          <div className="flex flex-wrap items-center gap-2 text-[13px] text-(--color-text-subtle)">
+            <span>{interaccion.autor?.nombre ?? "Autor no disponible"}</span>
+            <span>·</span>
+            <span>{formatRelativePast(new Date(interaccion.fecha))}</span>
+          </div>
+        </button>
       </Card>
     </li>
   );

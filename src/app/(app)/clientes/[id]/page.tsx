@@ -17,14 +17,17 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { OverlayPendiente } from "@/components/ui/overlay-pendiente";
 import { EditarClienteOverlay } from "./editar-cliente-overlay";
+import { ProgramarSeguimientoOverlay } from "./programar-seguimiento-overlay";
+import { AnotarInteraccionOverlay } from "../anotar-interaccion-overlay";
 import { RegistrarVentaOverlay } from "../registrar-venta-overlay";
 import {
   CANALES_ORIGEN,
   ESTADOS_CLIENTE,
   ESTADOS_VENTA,
+  ICONOS_CANAL_INTERACCION,
   estadoClienteOFallback,
+  type CanalInteraccion,
   type EstadoVenta,
 } from "@/lib/constants";
 import { formatCurrency, startOfDay } from "@/lib/format";
@@ -39,6 +42,7 @@ export default function FichaClientePage() {
   const cliente = useQuery(api.clientes.obtener, { id: clienteId });
   const seguimientos = useQuery(api.seguimientos.listarPendientesPorCliente, { clienteId });
   const ventas = useQuery(api.ventas.listarPorCliente, { clienteId });
+  const interacciones = useQuery(api.interacciones.listarPorCliente, { clienteId });
 
   const [editando, setEditando] = useState(false);
   const [accesoAbierto, setAccesoAbierto] = useState<AccesoRapido>(null);
@@ -69,6 +73,20 @@ export default function FichaClientePage() {
   // timestamp crudo — un seguimiento que vence hoy no debe verse "Atrasado"
   // solo porque ya pasó la hora exacta en que se creó.
   const hoyInicio = startOfDay(new Date()).getTime();
+
+  // Historial combinado (MID-19): ventas (MID-20/MID-21) e interacciones
+  // (MID-14/MID-16) vienen de dos queries distintas — cada una ya ordenada
+  // por su propio índice — y se fusionan acá en una sola lista por `fecha`
+  // descendente. Se espera a que ambas queries resuelvan antes de decidir el
+  // estado vacío: si solo faltara una, un cliente con puras ventas (o puras
+  // interacciones) vería "Cargando…" solo brevemente, nunca el vacío falso.
+  const historialCargando = ventas === undefined || interacciones === undefined;
+  const historial = historialCargando
+    ? []
+    : [
+        ...ventas.map((venta) => ({ tipo: "venta" as const, item: venta })),
+        ...interacciones.map((interaccion) => ({ tipo: "interaccion" as const, item: interaccion })),
+      ].sort((a, b) => b.item.fecha - a.item.fecha);
 
   return (
     <div className="mx-auto flex max-w-[860px] flex-col gap-5 p-5 pb-24">
@@ -180,16 +198,14 @@ export default function FichaClientePage() {
         )}
       </section>
 
-      {/* Historial cronológico (MID-19): la parte de ventas ya está montada
-          (MID-20/MID-21). La parte de interacciones (MID-14/MID-16) se
-          construye en una rama distinta (una rama por tarea) — hasta que esa
-          otra se mergee, este historial solo muestra ventas; el merge de
-          ambas listas por fecha queda para cuando las dos ramas se integren. */}
+      {/* Historial cronológico (MID-19): fusión de ventas (MID-20/MID-21) e
+          interacciones (MID-14/MID-16) construida arriba, ordenada por
+          fecha descendente. */}
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-(--color-text-muted)">Historial</h2>
-        {ventas === undefined ? (
+        {historialCargando ? (
           <p className="text-[14px] text-(--color-text-subtle)">Cargando…</p>
-        ) : ventas.length === 0 ? (
+        ) : historial.length === 0 ? (
           <EmptyState
             icon={Clock}
             title="Sin actividad todavía"
@@ -197,9 +213,13 @@ export default function FichaClientePage() {
           />
         ) : (
           <ul className="flex flex-col gap-2">
-            {ventas.map((venta) => (
-              <FilaVenta key={venta._id} venta={venta} />
-            ))}
+            {historial.map((entrada) =>
+              entrada.tipo === "venta" ? (
+                <FilaVenta key={entrada.item._id} venta={entrada.item} />
+              ) : (
+                <FilaInteraccion key={entrada.item._id} interaccion={entrada.item} />
+              )
+            )}
           </ul>
         )}
       </section>
@@ -214,19 +234,17 @@ export default function FichaClientePage() {
         cliente={cliente}
       />
 
-      <OverlayPendiente
+      <AnotarInteraccionOverlay
+        key={accesoAbierto === "anotar-interaccion" ? "abierto" : "cerrado"}
         open={accesoAbierto === "anotar-interaccion"}
         onClose={() => setAccesoAbierto(null)}
-        titulo="Anotar interacción"
-        issue="MID-16"
-        descripcion="Registrar una interacción con este cliente (llamada, email, WhatsApp, en persona)."
+        clientePreseleccionado={{ id: clienteId, nombre: cliente.nombre }}
       />
-      <OverlayPendiente
+      <ProgramarSeguimientoOverlay
+        key={accesoAbierto === "programar-seguimiento" ? "abierto" : "cerrado"}
         open={accesoAbierto === "programar-seguimiento"}
         onClose={() => setAccesoAbierto(null)}
-        titulo="Programar seguimiento"
-        issue="MID-17"
-        descripcion="Programar un seguimiento para este cliente, con posibilidad de reasignar el responsable."
+        clienteId={clienteId}
       />
       <RegistrarVentaOverlay
         key={accesoAbierto === "registrar-venta" ? "abierto" : "cerrado"}
@@ -281,6 +299,37 @@ function FilaSeguimientoCliente({
           <span>·</span>
           <span>{seguimiento.responsable?.nombre ?? "Sin responsable"}</span>
         </div>
+      </Card>
+    </li>
+  );
+}
+
+/**
+ * MID-19: copy exacto "ícono según canal + nota + 'Registrado por [autor]'".
+ */
+function FilaInteraccion({
+  interaccion,
+}: {
+  interaccion: {
+    _id: string;
+    tipo: CanalInteraccion;
+    nota: string;
+    fecha: number;
+    autor: { nombre: string } | null;
+  };
+}) {
+  const Icono = ICONOS_CANAL_INTERACCION[interaccion.tipo];
+  return (
+    <li>
+      <Card className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2 text-[13px] text-(--color-text-subtle)">
+          <Icono size={15} strokeWidth={1.5} />
+          <span>{new Date(interaccion.fecha).toLocaleDateString("es-ES")}</span>
+        </div>
+        <p className="text-[14px] text-(--color-text)">{interaccion.nota}</p>
+        <p className="text-[13px] text-(--color-text-subtle)">
+          Registrado por {interaccion.autor?.nombre ?? "Autor no disponible"}
+        </p>
       </Card>
     </li>
   );

@@ -1,3 +1,5 @@
+import { Handshake, Mail, MessageCircle, Phone, type LucideIcon } from "lucide-react";
+
 /**
  * Enums y etiquetas del dominio Vibe CRM.
  * Fuente: PRD de Notion ("CRM - PRD") + decisiones registradas en los issues de Linear
@@ -47,6 +49,19 @@ export const CANALES_INTERACCION = {
 } as const;
 
 export type CanalInteraccion = keyof typeof CANALES_INTERACCION;
+
+/**
+ * MID-16/19: ícono por canal en el historial de la Ficha y en el feed de Hoy.
+ * Phone/Mail ya se usan para los datos de contacto del cliente (coherencia
+ * visual); MessageCircle para whatsapp (lucide no tiene ícono de marca) evita
+ * duplicar MessageSquarePlus, ya usado en el botón de acceso rápido.
+ */
+export const ICONOS_CANAL_INTERACCION: Record<CanalInteraccion, LucideIcon> = {
+  llamada: Phone,
+  email: Mail,
+  whatsapp: MessageCircle,
+  en_persona: Handshake,
+};
 
 /**
  * Moneda: dólares, formato $1,200.50 (ver issues MID-20/21/23 — el prototipo de
