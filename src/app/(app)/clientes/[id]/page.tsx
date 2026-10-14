@@ -228,26 +228,26 @@ export default function FichaClientePage() {
           siempre arranca con los datos vigentes del cliente, sin necesitar
           un efecto que sincronice estado (ver comentario del overlay). */}
       <EditarClienteOverlay
-        key={editando ? "abierto" : "cerrado"}
+        key={`editar-${editando ? "abierto" : "cerrado"}`}
         open={editando}
         onClose={() => setEditando(false)}
         cliente={cliente}
       />
 
       <AnotarInteraccionOverlay
-        key={accesoAbierto === "anotar-interaccion" ? "abierto" : "cerrado"}
+        key={`anotar-interaccion-${accesoAbierto === "anotar-interaccion" ? "abierto" : "cerrado"}`}
         open={accesoAbierto === "anotar-interaccion"}
         onClose={() => setAccesoAbierto(null)}
         clientePreseleccionado={{ id: clienteId, nombre: cliente.nombre }}
       />
       <ProgramarSeguimientoOverlay
-        key={accesoAbierto === "programar-seguimiento" ? "abierto" : "cerrado"}
+        key={`programar-seguimiento-${accesoAbierto === "programar-seguimiento" ? "abierto" : "cerrado"}`}
         open={accesoAbierto === "programar-seguimiento"}
         onClose={() => setAccesoAbierto(null)}
         clienteId={clienteId}
       />
       <RegistrarVentaOverlay
-        key={accesoAbierto === "registrar-venta" ? "abierto" : "cerrado"}
+        key={`registrar-venta-${accesoAbierto === "registrar-venta" ? "abierto" : "cerrado"}`}
         open={accesoAbierto === "registrar-venta"}
         onClose={() => setAccesoAbierto(null)}
         clientePreseleccionado={{ id: clienteId, nombre: cliente.nombre }}
