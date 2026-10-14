@@ -1,7 +1,8 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { requireUsuario } from "./authHelpers";
 
 /**
@@ -15,6 +16,11 @@ import { requireUsuario } from "./authHelpers";
 // Mismo criterio de límite explícito que interacciones.ts/seguimientos.ts:
 // MVP de negocio pequeño (decenas de ventas por cliente, no miles).
 const LIMITE_HISTORIAL = 100;
+
+// MID-23: límite del listado agregado de Ventas y oportunidades (mismo valor
+// y mismo criterio que `clientes.listar`). Las métricas y los contadores de
+// los chips de filtro NO salen de esta lista acotada — ver `resumen` abajo.
+const LIMITE_LISTADO = 500;
 
 /**
  * Hallazgo de auditoría: `importe > 0` no bastaba — una llamada directa a la
@@ -95,6 +101,86 @@ async function recalcularEstadoCliente(ctx: MutationCtx, clienteId: Id<"clientes
   await ctx.db.patch(clienteId, { estado: "perdido" });
 }
 
+type EstadoVenta = "oportunidad_abierta" | "ganada" | "perdida";
+
+const ERROR_RESUMEN_FUERA_DE_RANGO =
+  "El resumen de ventas superó un rango seguro de cálculo.";
+
+/**
+ * MID-23: mantiene `resumenVentas` (documento único, ver convex/schema.ts) al
+ * día de forma incremental, para que la pantalla "Ventas y oportunidades"
+ * pueda leer sus métricas en O(1) en vez de escanear toda la tabla `ventas`
+ * en cada apertura.
+ *
+ * Deduplicación por documento, no por tiempo (hallazgo de auditoría, rondas
+ * 5/6): un corte basado en `Date.now()`/`_creationTime` no garantiza el orden
+ * real de *commit* de las transacciones bajo reintentos de OCC, así que
+ * comparar por tiempo podía clasificar mal una venta y contarla dos veces.
+ * En cambio, cada venta se marca `contadoEnResumen: true` en la **misma
+ * transacción** que la suma al resumen — la pregunta "¿ya se contó esta
+ * venta?" se resuelve leyendo el propio documento de la venta, nunca
+ * comparando relojes de transacciones distintas. Eso hace esta función
+ * segura de llamar más de una vez para la misma venta (la llama tanto
+ * `crear` como el backfill) y segura ante altas concurrentes: si dos
+ * llamadas leen la misma venta sin marcar, el OCC de Convex serializa/
+ * reintenta una de las dos, que al reintentar ve el flag ya en `true` y no
+ * hace nada.
+ */
+async function incrementarResumen(
+  ctx: MutationCtx,
+  ventaId: Id<"ventas">,
+  estado: EstadoVenta,
+  centavos: number
+) {
+  const venta = await ctx.db.get(ventaId);
+  if (!venta || venta.contadoEnResumen) return;
+
+  const existente = await ctx.db.query("resumenVentas").first();
+  const resumenId =
+    existente?._id ??
+    (await ctx.db.insert("resumenVentas", {
+      enMarchaCentavos: 0,
+      enMarchaCantidad: 0,
+      ganadaCentavos: 0,
+      ganadaCantidad: 0,
+      perdidaCentavos: 0,
+      perdidaCantidad: 0,
+    }));
+  const resumen = existente ?? (await ctx.db.get(resumenId))!;
+
+  switch (estado) {
+    case "oportunidad_abierta": {
+      const centavosNuevos = resumen.enMarchaCentavos + centavos;
+      if (!Number.isSafeInteger(centavosNuevos)) throw new Error(ERROR_RESUMEN_FUERA_DE_RANGO);
+      await ctx.db.patch(resumenId, {
+        enMarchaCentavos: centavosNuevos,
+        enMarchaCantidad: resumen.enMarchaCantidad + 1,
+      });
+      break;
+    }
+    case "ganada": {
+      const centavosNuevos = resumen.ganadaCentavos + centavos;
+      if (!Number.isSafeInteger(centavosNuevos)) throw new Error(ERROR_RESUMEN_FUERA_DE_RANGO);
+      await ctx.db.patch(resumenId, {
+        ganadaCentavos: centavosNuevos,
+        ganadaCantidad: resumen.ganadaCantidad + 1,
+      });
+      break;
+    }
+    case "perdida": {
+      const centavosNuevos = resumen.perdidaCentavos + centavos;
+      if (!Number.isSafeInteger(centavosNuevos)) throw new Error(ERROR_RESUMEN_FUERA_DE_RANGO);
+      await ctx.db.patch(resumenId, {
+        perdidaCentavos: centavosNuevos,
+        perdidaCantidad: resumen.perdidaCantidad + 1,
+      });
+      break;
+    }
+  }
+
+  await ctx.db.patch(ventaId, { contadoEnResumen: true });
+}
+
 /**
  * Ficha de cliente (MID-21): historial cronológico por `fecha` (la que elige
  * la persona usuaria al registrar la venta, no `_creationTime`) — por eso usa
@@ -122,9 +208,70 @@ export const listarPorCliente = query({
 });
 
 /**
+ * MID-23: listado agregado para la pantalla "Ventas y oportunidades" — todas
+ * las ventas del negocio (no de un cliente puntual), ordenadas por `fecha`
+ * vía el índice global `by_fecha` y acotadas a `LIMITE_LISTADO`. El límite lo
+ * aplica el índice (no un `.collect()` + sort en memoria), así que acota el
+ * trabajo real de la consulta, no solo el tamaño de la respuesta. Esta lista
+ * puede no incluir el negocio completo más allá de ese límite — las métricas
+ * y los contadores de los chips de filtro nunca salen de acá, ver `resumen`.
+ */
+export const listarTodas = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUsuario(ctx);
+    const ventas = await ctx.db
+      .query("ventas")
+      .withIndex("by_fecha")
+      .order("desc")
+      .take(LIMITE_LISTADO);
+
+    return await Promise.all(
+      ventas.map(async (venta) => {
+        const cliente = await ctx.db.get(venta.clienteId);
+        return {
+          _id: venta._id,
+          concepto: venta.concepto,
+          importe: venta.importe,
+          estado: venta.estado,
+          fecha: venta.fecha,
+          clienteId: venta.clienteId,
+          cliente: cliente ? { nombre: cliente.nombre } : null,
+        };
+      })
+    );
+  },
+});
+
+/**
+ * MID-23: métricas ("en marcha"/"ganado") y contadores de los 4 chips de
+ * filtro de la pantalla "Ventas y oportunidades" — lectura O(1) del
+ * documento único `resumenVentas` (mantenido por `incrementarResumen`), no
+ * un escaneo de `ventas`. Por eso son correctos sin importar cuántas ventas
+ * tenga el negocio, a diferencia de `listarTodas`, que sí está acotada.
+ */
+export const resumen = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUsuario(ctx);
+    const r = await ctx.db.query("resumenVentas").first();
+    const enMarcha = { suma: (r?.enMarchaCentavos ?? 0) / 100, cantidad: r?.enMarchaCantidad ?? 0 };
+    const ganadas = { suma: (r?.ganadaCentavos ?? 0) / 100, cantidad: r?.ganadaCantidad ?? 0 };
+    const perdidas = { suma: (r?.perdidaCentavos ?? 0) / 100, cantidad: r?.perdidaCantidad ?? 0 };
+    return {
+      totalVentas: enMarcha.cantidad + ganadas.cantidad + perdidas.cantidad,
+      enMarcha,
+      ganadas,
+      perdidas,
+    };
+  },
+});
+
+/**
  * MID-21: registrar una venta/oportunidad desde la Ficha de cliente (o, con
- * el mismo formulario, desde el selector de cliente de Hoy). El autor es
- * quien tiene la sesión (MID-7) — misma razón que `interacciones.crear`.
+ * el mismo formulario, desde el selector de cliente de Hoy o de la pantalla
+ * Ventas). El autor es quien tiene la sesión (MID-7) — misma razón que
+ * `interacciones.crear`.
  */
 export const crear = mutation({
   args: {
@@ -158,6 +305,49 @@ export const crear = mutation({
       autorId: usuario._id,
     });
     await recalcularEstadoCliente(ctx, args.clienteId);
+    await incrementarResumen(ctx, id, args.estado, Math.round(importe * 100));
     return id;
+  },
+});
+
+/**
+ * MID-23: migración de una sola vez — inicializa `resumenVentas` a partir de
+ * ventas que ya existían antes de que este campo/mecanismo existiera (p. ej.
+ * las registradas por MID-20/21/22 en cualquier deployment, antes de este
+ * cambio). Paginada (500 ventas por llamada, ver `LIMITE_LISTADO`) para no
+ * chocar con los límites de lectura de Convex por ejecución, sin importar
+ * cuán grande sea el historial. Segura de correr más de una vez, e incluso en
+ * paralelo con altas nuevas vía `crear`: `incrementarResumen` es idempotente
+ * por venta (ver su comentario), así que recorrer una venta ya contada es un
+ * no-op. Correr manualmente después de desplegar este cambio:
+ *   npx convex run ventas:backfillResumen           (deployment de dev)
+ *   npx convex run ventas:backfillResumen --prod    (producción, si aplica)
+ * No correr dos instancias de esta migración en simultáneo contra el mismo
+ * deployment — no es un caso que la lógica anterior necesite cubrir para una
+ * migración manual de una sola vez.
+ */
+export const _backfillResumenBatch = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  handler: async (ctx, { cursor }) => {
+    const pagina = await ctx.db.query("ventas").paginate({ cursor: cursor ?? null, numItems: 500 });
+    for (const venta of pagina.page) {
+      const centavos = Math.round(venta.importe * 100);
+      await incrementarResumen(ctx, venta._id, venta.estado, centavos);
+    }
+    return { continueCursor: pagina.continueCursor, isDone: pagina.isDone };
+  },
+});
+
+export const backfillResumen = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    let cursor: string | undefined;
+    let isDone = false;
+    while (!isDone) {
+      const resultado = await ctx.runMutation(internal.ventas._backfillResumenBatch, { cursor });
+      cursor = resultado.continueCursor;
+      isDone = resultado.isDone;
+    }
+    return { ok: true };
   },
 });

@@ -96,6 +96,10 @@ export default defineSchema({
     ),
     fecha: v.number(),
     autorId: v.id("usuarios"),
+    // MID-23: opcional por el mismo motivo que `clientes.estado` — un documento
+    // preexistente sin este campo sigue siendo válido, su ausencia se trata como
+    // "todavía no contado" en `resumenVentas` (ver convex/ventas.ts).
+    contadoEnResumen: v.optional(v.boolean()),
   })
     .index("by_cliente", ["clienteId"])
     // MID-22: existencia indexada por estado (sin recorrer el historial completo
@@ -104,5 +108,24 @@ export default defineSchema({
     // MID-21: `fecha` la elige la persona usuaria (no es Date.now() al crear, a
     // diferencia de `interacciones.fecha`), así que el historial por cliente
     // necesita ordenar por este campo vía índice, no por `_creationTime`.
-    .index("by_cliente_fecha", ["clienteId", "fecha"]),
+    .index("by_cliente_fecha", ["clienteId", "fecha"])
+    // MID-23: índice global (no compuesto por cliente) para la pantalla
+    // agregada "Ventas y oportunidades" — ordenar/acotar el listado cruzado
+    // de clientes vía índice, sin un `.collect()` de toda la tabla.
+    .index("by_fecha", ["fecha"]),
+
+  // MID-23: documento único (como mucho una fila) con el resumen acumulado de
+  // todas las ventas del negocio, mantenido de forma incremental por
+  // `incrementarResumen` (ver convex/ventas.ts) — así la query `resumen` es
+  // una lectura O(1), no un escaneo de `ventas` en cada apertura de pantalla.
+  // Sumas en centavos enteros (no dólares de punto flotante), mismo criterio
+  // que `normalizarImporte`.
+  resumenVentas: defineTable({
+    enMarchaCentavos: v.number(),
+    enMarchaCantidad: v.number(),
+    ganadaCentavos: v.number(),
+    ganadaCantidad: v.number(),
+    perdidaCentavos: v.number(),
+    perdidaCantidad: v.number(),
+  }),
 });
