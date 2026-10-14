@@ -185,12 +185,12 @@ export default function HoyPage() {
         onClose={() => setAccesoAbierto(null)}
       />
       <AnotarInteraccionOverlay
-        key={accesoAbierto === "anotar-interaccion" ? "abierto" : "cerrado"}
+        key={`anotar-interaccion-${accesoAbierto === "anotar-interaccion" ? "abierto" : "cerrado"}`}
         open={accesoAbierto === "anotar-interaccion"}
         onClose={() => setAccesoAbierto(null)}
       />
       <RegistrarVentaOverlay
-        key={accesoAbierto === "registrar-venta" ? "abierto" : "cerrado"}
+        key={`registrar-venta-${accesoAbierto === "registrar-venta" ? "abierto" : "cerrado"}`}
         open={accesoAbierto === "registrar-venta"}
         onClose={() => setAccesoAbierto(null)}
       />
