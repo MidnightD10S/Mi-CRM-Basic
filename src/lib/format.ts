@@ -10,6 +10,24 @@ export function formatCurrency(amount: number): string {
 }
 
 /**
+ * Máscara "en vivo" del campo Importe (MID-21): el input guarda solo los
+ * dígitos crudos que la persona escribió (sin el "$", que va fijo en el JSX
+ * al lado del campo) y se tratan como centavos — así nunca hay que parsear
+ * un string ya formateado ni gestionar la posición del cursor.
+ */
+export function formatCurrencyInputFromDigits(digits: string): string {
+  const centavos = Number(digits || "0");
+  return (centavos / 100).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export function parseCurrencyDigitsToNumber(digits: string): number {
+  return Number(digits || "0") / 100;
+}
+
+/**
  * Etiqueta de "último contacto" / fecha relativa pasada, según el diseño
  * (issue MID-12): "Hoy" / "Ayer" / "Hace N días" (<7) / "Hace N semanas" (>=7).
  */

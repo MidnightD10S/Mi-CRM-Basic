@@ -8,11 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { OverlayPendiente } from "@/components/ui/overlay-pendiente";
 import { useToast } from "@/components/ui/toast";
 import { NuevaTareaOverlay } from "./nueva-tarea-overlay";
 import { NuevoClienteOverlay } from "../clientes/nuevo-cliente-overlay";
 import { AnotarInteraccionOverlay } from "../clientes/anotar-interaccion-overlay";
+import { RegistrarVentaOverlay } from "../clientes/registrar-venta-overlay";
 import {
   ESTADOS_CLIENTE,
   ICONOS_CANAL_INTERACCION,
@@ -189,12 +189,10 @@ export default function HoyPage() {
         open={accesoAbierto === "anotar-interaccion"}
         onClose={() => setAccesoAbierto(null)}
       />
-      <OverlayPendiente
+      <RegistrarVentaOverlay
+        key={accesoAbierto === "registrar-venta" ? "abierto" : "cerrado"}
         open={accesoAbierto === "registrar-venta"}
         onClose={() => setAccesoAbierto(null)}
-        titulo="Registrar venta"
-        issue="MID-20 / MID-21"
-        descripcion="Registrar una venta u oportunidad (concepto, importe, estado) desde un selector de cliente."
       />
       {/* MID-11 ya está construido (ver src/app/(app)/clientes/nuevo-cliente-overlay.tsx)
           — este acceso rápido había quedado apuntando al aviso de "pantalla

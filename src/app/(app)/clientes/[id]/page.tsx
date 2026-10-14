@@ -17,18 +17,20 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { OverlayPendiente } from "@/components/ui/overlay-pendiente";
 import { EditarClienteOverlay } from "./editar-cliente-overlay";
 import { ProgramarSeguimientoOverlay } from "./programar-seguimiento-overlay";
 import { AnotarInteraccionOverlay } from "../anotar-interaccion-overlay";
+import { RegistrarVentaOverlay } from "../registrar-venta-overlay";
 import {
   CANALES_ORIGEN,
   ESTADOS_CLIENTE,
+  ESTADOS_VENTA,
   ICONOS_CANAL_INTERACCION,
   estadoClienteOFallback,
   type CanalInteraccion,
+  type EstadoVenta,
 } from "@/lib/constants";
-import { startOfDay } from "@/lib/format";
+import { formatCurrency, startOfDay } from "@/lib/format";
 import { api, type Id } from "@/lib/convex-generated";
 
 type AccesoRapido = "anotar-interaccion" | "programar-seguimiento" | "registrar-venta" | null;
@@ -39,7 +41,8 @@ export default function FichaClientePage() {
 
   const cliente = useQuery(api.clientes.obtener, { id: clienteId });
   const seguimientos = useQuery(api.seguimientos.listarPendientesPorCliente, { clienteId });
-  const historial = useQuery(api.interacciones.listarPorCliente, { clienteId });
+  const ventas = useQuery(api.ventas.listarPorCliente, { clienteId });
+  const interacciones = useQuery(api.interacciones.listarPorCliente, { clienteId });
 
   const [editando, setEditando] = useState(false);
   const [accesoAbierto, setAccesoAbierto] = useState<AccesoRapido>(null);
@@ -70,6 +73,20 @@ export default function FichaClientePage() {
   // timestamp crudo — un seguimiento que vence hoy no debe verse "Atrasado"
   // solo porque ya pasó la hora exacta en que se creó.
   const hoyInicio = startOfDay(new Date()).getTime();
+
+  // Historial combinado (MID-19): ventas (MID-20/MID-21) e interacciones
+  // (MID-14/MID-16) vienen de dos queries distintas — cada una ya ordenada
+  // por su propio índice — y se fusionan acá en una sola lista por `fecha`
+  // descendente. Se espera a que ambas queries resuelvan antes de decidir el
+  // estado vacío: si solo faltara una, un cliente con puras ventas (o puras
+  // interacciones) vería "Cargando…" solo brevemente, nunca el vacío falso.
+  const historialCargando = ventas === undefined || interacciones === undefined;
+  const historial = historialCargando
+    ? []
+    : [
+        ...ventas.map((venta) => ({ tipo: "venta" as const, item: venta })),
+        ...interacciones.map((interaccion) => ({ tipo: "interaccion" as const, item: interaccion })),
+      ].sort((a, b) => b.item.fecha - a.item.fecha);
 
   return (
     <div className="mx-auto flex max-w-[860px] flex-col gap-5 p-5 pb-24">
@@ -181,13 +198,12 @@ export default function FichaClientePage() {
         )}
       </section>
 
-      {/* Historial cronológico (MID-19): la parte de interacciones ya está
-          montada (MID-14/MID-16); solo falta la parte de ventas (Fase 4,
-          MID-20/MID-21) — hasta entonces, el estado vacío solo aparece si no
-          hay ninguna interacción registrada. */}
+      {/* Historial cronológico (MID-19): fusión de ventas (MID-20/MID-21) e
+          interacciones (MID-14/MID-16) construida arriba, ordenada por
+          fecha descendente. */}
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-(--color-text-muted)">Historial</h2>
-        {historial === undefined ? (
+        {historialCargando ? (
           <p className="text-[14px] text-(--color-text-subtle)">Cargando…</p>
         ) : historial.length === 0 ? (
           <EmptyState
@@ -197,9 +213,13 @@ export default function FichaClientePage() {
           />
         ) : (
           <ul className="flex flex-col gap-2">
-            {historial.map((interaccion) => (
-              <FilaInteraccion key={interaccion._id} interaccion={interaccion} />
-            ))}
+            {historial.map((entrada) =>
+              entrada.tipo === "venta" ? (
+                <FilaVenta key={entrada.item._id} venta={entrada.item} />
+              ) : (
+                <FilaInteraccion key={entrada.item._id} interaccion={entrada.item} />
+              )
+            )}
           </ul>
         )}
       </section>
@@ -226,14 +246,37 @@ export default function FichaClientePage() {
         onClose={() => setAccesoAbierto(null)}
         clienteId={clienteId}
       />
-      <OverlayPendiente
+      <RegistrarVentaOverlay
+        key={accesoAbierto === "registrar-venta" ? "abierto" : "cerrado"}
         open={accesoAbierto === "registrar-venta"}
         onClose={() => setAccesoAbierto(null)}
-        titulo="Registrar venta"
-        issue="MID-20 / MID-21"
-        descripcion="Registrar una venta u oportunidad (concepto, importe, estado) para este cliente."
+        clientePreseleccionado={{ id: clienteId, nombre: cliente.nombre }}
       />
     </div>
+  );
+}
+
+function FilaVenta({
+  venta,
+}: {
+  venta: { _id: string; concepto: string; importe: number; estado: EstadoVenta; fecha: number };
+}) {
+  const estadoInfo = ESTADOS_VENTA[venta.estado];
+  return (
+    <li>
+      <Card className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Badge tone={estadoInfo.tone}>{estadoInfo.label}</Badge>
+          <span className="text-[14px] font-medium text-(--color-text)">
+            {formatCurrency(venta.importe)}
+          </span>
+        </div>
+        <p className="text-[14px] text-(--color-text)">{venta.concepto}</p>
+        <span className="text-[13px] text-(--color-text-subtle)">
+          {new Date(venta.fecha).toLocaleDateString("es-ES")}
+        </span>
+      </Card>
+    </li>
   );
 }
 

@@ -96,5 +96,13 @@ export default defineSchema({
     ),
     fecha: v.number(),
     autorId: v.id("usuarios"),
-  }).index("by_cliente", ["clienteId"]),
+  })
+    .index("by_cliente", ["clienteId"])
+    // MID-22: existencia indexada por estado (sin recorrer el historial completo
+    // del cliente) para recalcular el Estado del cliente en cada alta.
+    .index("by_cliente_estado", ["clienteId", "estado"])
+    // MID-21: `fecha` la elige la persona usuaria (no es Date.now() al crear, a
+    // diferencia de `interacciones.fecha`), así que el historial por cliente
+    // necesita ordenar por este campo vía índice, no por `_creationTime`.
+    .index("by_cliente_fecha", ["clienteId", "fecha"]),
 });
