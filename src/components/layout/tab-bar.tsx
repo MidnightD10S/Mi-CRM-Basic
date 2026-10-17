@@ -30,6 +30,15 @@ export function TabBar() {
   return (
     <nav
       aria-label="Navegación principal"
+      // MID-24: `viewTransitionName` propio — al ser `fixed` (fuera del
+      // flujo), no la cubre ninguna caja con nombre (ver globals.css), pero
+      // sigue quedando debajo de la capa superior donde el navegador pinta
+      // el cross-fade de la página, y esa capa se ve "transparentándose"
+      // sobre ella. Dándole su propio grupo (sin animar, ver globals.css) la
+      // sacamos de la captura implícita de "root" y queda anclada, tal como
+      // documenta Next para cualquier chrome fijo (`view-transitions.md`,
+      // sección "Anchoring the header").
+      style={{ viewTransitionName: "tab-bar" }}
       className="fixed inset-x-0 bottom-0 z-10 flex border-t border-(--color-border) bg-(--color-surface) md:hidden"
     >
       {items.map(({ href, label, icon: Icon }) => {
