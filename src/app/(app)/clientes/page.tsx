@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, ViewTransition } from "react";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import { Plus, Search, Users } from "lucide-react";
@@ -23,6 +23,22 @@ export default function ClientesPage() {
   const sinResultados = !cargando && busqueda.trim() !== "" && clientes.length === 0;
 
   return (
+    // MID-24: cross-fade al cambiar de tab (`default`) y push horizontal al
+    // entrar a una Ficha (`enter`/`exit`, parejas con el mismo mapa en
+    // clientes/[id]/page.tsx — ver globals.css para las clases reales).
+    <ViewTransition
+      default="tab-fade"
+      enter={{ "nav-forward": "nav-forward", "nav-back": "nav-back", default: "tab-fade" }}
+      exit={{ "nav-forward": "nav-forward", "nav-back": "nav-back", default: "tab-fade" }}
+    >
+    {/* El scroll vive en este div, a todo el ancho — no en el div de abajo
+        que centra el contenido (`mx-auto max-w-[860px]`). Si `overflow-y-auto`
+        viviera en el mismo div centrado, la barra de desplazamiento sale al
+        borde de esa caja angosta (se ve "centrada" en vez de pegada al
+        borde real de la pantalla). También acota la caja que la View
+        Transition API captura a lo que realmente se ve — ver el comentario
+        en src/app/(app)/layout.tsx. */}
+    <div className="h-full overflow-y-auto">
     <div className="mx-auto flex max-w-[860px] flex-col gap-5 p-5 pb-24">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-[var(--tracking-tight)]">Clientes</h1>
@@ -109,6 +125,8 @@ export default function ClientesPage() {
 
       <NuevoClienteOverlay open={altaAbierta} onClose={() => setAltaAbierta(false)} />
     </div>
+    </div>
+    </ViewTransition>
   );
 }
 
@@ -123,8 +141,14 @@ function FilaCliente({
   return (
     <li>
       {/* Link (no button+div): es una navegación real, no una acción — permite
-          abrir en pestaña nueva, Ctrl/Cmd-click, etc. */}
-      <Link href={`/clientes/${cliente._id}`} className="block">
+          abrir en pestaña nueva, Ctrl/Cmd-click, etc. `?from=clientes` +
+          `transitionTypes` (MID-24): el botón "atrás" de la Ficha usa el
+          origen para volver aquí, con el push horizontal animado. */}
+      <Link
+        href={`/clientes/${cliente._id}?from=clientes`}
+        transitionTypes={["nav-forward"]}
+        className="block"
+      >
         <Card className="flex flex-col gap-1.5 transition-colors hover:bg-(--color-surface-2)">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[15px] font-medium">{cliente.nombre}</span>

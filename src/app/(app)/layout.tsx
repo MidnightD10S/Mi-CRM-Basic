@@ -18,7 +18,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-dvh w-full">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto pb-16 md:pb-0">
+      {/* MID-24: el scroll ya no vive acá — vive en un div propio dentro de
+          cada pantalla (ver su wrapper con <ViewTransition>), acotado a
+          `h-full`. Si este contenedor siguiera siendo el que scrollea, el
+          elemento que nombramos para la transición (más abajo, dentro de
+          `{children}`) crecería a la altura de TODO el contenido en vez de
+          a la altura visible, y la instantánea que captura la View
+          Transition API se superpondría a la cinta inferior fija. */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <AppErrorBoundary>
           <RequireAuth>{children}</RequireAuth>
         </AppErrorBoundary>

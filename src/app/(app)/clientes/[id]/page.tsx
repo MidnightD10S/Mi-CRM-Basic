@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useParams } from "next/navigation";
+import { Suspense, useState, ViewTransition } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import {
+  ArrowLeft,
   Building2,
   CalendarClock,
   Clock,
@@ -36,8 +37,54 @@ import { api, type Id } from "@/lib/convex-generated";
 type AccesoRapido = "anotar-interaccion" | "programar-seguimiento" | "registrar-venta" | null;
 
 export default function FichaClientePage() {
+  return (
+    // MID-24: mismo mapa direccional que clientes/page.tsx y hoy/page.tsx —
+    // pareja necesaria para que el push horizontal anime en ambos lados al
+    // entrar desde una lista.
+    <ViewTransition
+      default="tab-fade"
+      enter={{ "nav-forward": "nav-forward", "nav-back": "nav-back", default: "tab-fade" }}
+      exit={{ "nav-forward": "nav-forward", "nav-back": "nav-back", default: "tab-fade" }}
+    >
+      {/* `h-full overflow-y-auto`: acota la caja que la View Transition API
+          captura a lo que realmente se ve — ver el comentario en
+          src/app/(app)/layout.tsx. */}
+      <div className="h-full overflow-y-auto pb-16 md:pb-0">
+        {/* `useSearchParams` (para leer `?from=`) exige un límite Suspense
+            propio, o Next no puede servir esta página sin bajarla por
+            completo a cliente. */}
+        <Suspense fallback={<p className="p-5 text-[14px] text-(--color-text-subtle)">Cargando…</p>}>
+          <FichaClienteContent />
+        </Suspense>
+      </div>
+    </ViewTransition>
+  );
+}
+
+function FichaClienteContent() {
   const params = useParams<{ id: string }>();
   const clienteId = params.id as Id<"clientes">;
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // MID-24: "el botón atrás lleva de vuelta a la lista de clientes o a
+  // Tareas del día, según desde dónde se entró" — el origen viaja en
+  // `?from=`, puesto por quien enlaza hacia aquí (Clientes, Hoy o Ventas).
+  const fromParam = searchParams.get("from");
+  const origen = fromParam === "hoy" || fromParam === "ventas" ? fromParam : "clientes";
+  const RUTA_ORIGEN: Record<typeof origen, string> = {
+    hoy: "/hoy",
+    ventas: "/ventas",
+    clientes: "/clientes",
+  };
+  const ETIQUETA_ORIGEN: Record<typeof origen, string> = {
+    hoy: "Hoy",
+    ventas: "Ventas",
+    clientes: "Clientes",
+  };
+
+  function volver() {
+    router.push(RUTA_ORIGEN[origen], { transitionTypes: ["nav-back"] });
+  }
 
   const cliente = useQuery(api.clientes.obtener, { id: clienteId });
   const seguimientos = useQuery(api.seguimientos.listarPendientesPorCliente, { clienteId });
@@ -46,6 +93,28 @@ export default function FichaClientePage() {
 
   const [editando, setEditando] = useState(false);
   const [accesoAbierto, setAccesoAbierto] = useState<AccesoRapido>(null);
+
+  // MID-24: contadores que solo avanzan al ABRIR cada overlay (nunca al
+  // cerrar) — el `key` de cada uno se deriva de su propio contador, no de
+  // "abierto"/"cerrado". Si el `key` cambiara también al cerrar, React
+  // desmontaría la instancia a mitad de la animación de cierre del Overlay;
+  // y si los 4 overlays compartieran un solo contador, abrir cualquiera de
+  // los otros 3 remontaría (cortando la animación de) el que esté cerrando.
+  const [editarKey, setEditarKey] = useState(0);
+  const [anotarKey, setAnotarKey] = useState(0);
+  const [programarKey, setProgramarKey] = useState(0);
+  const [registrarKey, setRegistrarKey] = useState(0);
+
+  function abrirEditar() {
+    setEditarKey((k) => k + 1);
+    setEditando(true);
+  }
+  function abrirAcceso(tipo: Exclude<AccesoRapido, null>) {
+    if (tipo === "anotar-interaccion") setAnotarKey((k) => k + 1);
+    if (tipo === "programar-seguimiento") setProgramarKey((k) => k + 1);
+    if (tipo === "registrar-venta") setRegistrarKey((k) => k + 1);
+    setAccesoAbierto(tipo);
+  }
 
   if (cliente === undefined) {
     return (
@@ -90,6 +159,16 @@ export default function FichaClientePage() {
 
   return (
     <div className="mx-auto flex max-w-[860px] flex-col gap-5 p-5 pb-24">
+      {/* MID-24: vuelve a Clientes, Hoy o Ventas según `?from=`, puesto por
+          quien enlazó hacia esta ficha. */}
+      <button
+        type="button"
+        onClick={volver}
+        className="flex w-fit items-center gap-1.5 text-[14px] font-medium text-(--color-text-muted) hover:text-(--color-text)"
+      >
+        <ArrowLeft size={16} strokeWidth={1.5} />
+        {ETIQUETA_ORIGEN[origen]}
+      </button>
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -103,7 +182,7 @@ export default function FichaClientePage() {
             </span>
           )}
         </div>
-        <Button variant="secondary" size="compact" onClick={() => setEditando(true)}>
+        <Button variant="secondary" size="compact" onClick={abrirEditar}>
           <Pencil size={16} strokeWidth={1.5} />
           Editar
         </Button>
@@ -154,7 +233,7 @@ export default function FichaClientePage() {
         <Button
           variant="secondary"
           className="h-auto flex-col gap-1.5 py-3.5 text-[13px]"
-          onClick={() => setAccesoAbierto("anotar-interaccion")}
+          onClick={() => abrirAcceso("anotar-interaccion")}
         >
           <MessageSquarePlus size={20} strokeWidth={1.5} />
           Anotar interacción
@@ -162,7 +241,7 @@ export default function FichaClientePage() {
         <Button
           variant="secondary"
           className="h-auto flex-col gap-1.5 py-3.5 text-[13px]"
-          onClick={() => setAccesoAbierto("programar-seguimiento")}
+          onClick={() => abrirAcceso("programar-seguimiento")}
         >
           <CalendarClock size={20} strokeWidth={1.5} />
           Programar seguimiento
@@ -170,7 +249,7 @@ export default function FichaClientePage() {
         <Button
           variant="secondary"
           className="h-auto flex-col gap-1.5 py-3.5 text-[13px]"
-          onClick={() => setAccesoAbierto("registrar-venta")}
+          onClick={() => abrirAcceso("registrar-venta")}
         >
           <TrendingUp size={20} strokeWidth={1.5} />
           Registrar venta
@@ -224,30 +303,31 @@ export default function FichaClientePage() {
         )}
       </section>
 
-      {/* `key` fuerza un remount cada vez que se abre: así el formulario
-          siempre arranca con los datos vigentes del cliente, sin necesitar
-          un efecto que sincronice estado (ver comentario del overlay). */}
+      {/* `key` fuerza un remount cada vez que se abre (y solo al abrir, ver
+          los contadores arriba — MID-24): así el formulario siempre arranca
+          con los datos vigentes del cliente, pero cerrar no desmonta la
+          instancia a mitad de la animación de cierre del Overlay. */}
       <EditarClienteOverlay
-        key={`editar-${editando ? "abierto" : "cerrado"}`}
+        key={`editar-${editarKey}`}
         open={editando}
         onClose={() => setEditando(false)}
         cliente={cliente}
       />
 
       <AnotarInteraccionOverlay
-        key={`anotar-interaccion-${accesoAbierto === "anotar-interaccion" ? "abierto" : "cerrado"}`}
+        key={`anotar-${anotarKey}`}
         open={accesoAbierto === "anotar-interaccion"}
         onClose={() => setAccesoAbierto(null)}
         clientePreseleccionado={{ id: clienteId, nombre: cliente.nombre }}
       />
       <ProgramarSeguimientoOverlay
-        key={`programar-seguimiento-${accesoAbierto === "programar-seguimiento" ? "abierto" : "cerrado"}`}
+        key={`programar-${programarKey}`}
         open={accesoAbierto === "programar-seguimiento"}
         onClose={() => setAccesoAbierto(null)}
         clienteId={clienteId}
       />
       <RegistrarVentaOverlay
-        key={`registrar-venta-${accesoAbierto === "registrar-venta" ? "abierto" : "cerrado"}`}
+        key={`registrar-${registrarKey}`}
         open={accesoAbierto === "registrar-venta"}
         onClose={() => setAccesoAbierto(null)}
         clientePreseleccionado={{ id: clienteId, nombre: cliente.nombre }}

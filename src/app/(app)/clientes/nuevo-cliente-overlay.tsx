@@ -13,6 +13,11 @@ import { api } from "@/lib/convex-generated";
 interface NuevoClienteOverlayProps {
   open: boolean;
   onClose: () => void;
+  // MID-24: de dónde se abrió el overlay — este componente se usa tanto
+  // desde Clientes como desde el acceso rápido de Hoy (ver sus llamadores),
+  // y la Ficha a la que navega al guardar necesita saber el origen real
+  // para que su botón "atrás" vuelva al lugar correcto.
+  origen?: "clientes" | "hoy";
 }
 
 const selectClass =
@@ -27,7 +32,7 @@ const textareaClass =
  * crea el cliente con Estado inicial "Nuevo lead" (lo asigna el servidor) y
  * navega a su Ficha.
  */
-export function NuevoClienteOverlay({ open, onClose }: NuevoClienteOverlayProps) {
+export function NuevoClienteOverlay({ open, onClose, origen = "clientes" }: NuevoClienteOverlayProps) {
   const router = useRouter();
   const { show } = useToast();
   const crearCliente = useMutation(api.clientes.crear);
@@ -72,7 +77,7 @@ export function NuevoClienteOverlay({ open, onClose }: NuevoClienteOverlayProps)
       });
       show("Cliente añadido");
       cerrar();
-      router.push(`/clientes/${id}`);
+      router.push(`/clientes/${id}?from=${origen}`, { transitionTypes: ["nav-forward"] });
     } catch {
       show("No se pudo crear el cliente. Intenta de nuevo.");
     } finally {

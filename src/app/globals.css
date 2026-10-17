@@ -122,6 +122,11 @@
   --shadow-md: 0 2px 4px rgba(16, 24, 32, 0.05), 0 4px 12px rgba(16, 24, 32, 0.06);
   --shadow-lg: 0 8px 24px rgba(16, 24, 32, 0.1);
   --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-focus);
+
+  /* Scrim (MID-24): fondo del panel superpuesto, del diseño — distinto de
+     los --shadow-* (misma familia de color, pero es una capa de fondo, no
+     una sombra). */
+  --color-scrim: rgba(16, 24, 32, 0.45);
 }
 
 /* Dark mode: redefine semantics only. Toggle with data-theme="dark" on <html>. */
@@ -189,5 +194,116 @@
   .font-tabular {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+  }
+}
+
+/*
+ * MID-24 — transiciones de navegación con la View Transition API nativa de
+ * React 19.3 (ya instalada con Next 16, sin dependencias nuevas). Cada
+ * página participante le pasa `default="tab-fade"` y/o un mapa
+ * `nav-forward`/`nav-back` a su <ViewTransition>, lo que hace que el
+ * navegador exponga estos pseudo-elementos con esas mismas clases.
+ */
+::view-transition {
+  pointer-events: none;
+}
+
+/* El navegador siempre crea, además de nuestros grupos nombrados de abajo,
+   un grupo implícito "root" que cubre la página entera con su propio
+   cross-fade por defecto — sin esto, esa animación fantasma de página
+   completa queda corriendo en paralelo con `.tab-fade`/`.nav-forward`, y
+   como vive en la capa superior del navegador, se pinta por encima de todo
+   (incluida la barra inferior fija), viéndose como un destello transparente
+   superpuesto. La neutralizamos del todo: solo animan los grupos que
+   nombramos explícitamente. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* Ancla la cinta inferior fija (ver tab-bar.tsx): sin esto, la capa superior
+   donde el navegador pinta el cross-fade de `.tab-fade`/`.nav-forward` se
+   pinta por encima de ella (la capa de View Transitions siempre va por
+   encima de todo el documento, sin importar z-index), viéndose como una
+   transparencia superpuesta a la cinta en cada cambio de pantalla en móvil. */
+::view-transition-group(tab-bar) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(tab-bar) {
+  display: none;
+}
+::view-transition-new(tab-bar) {
+  animation: none;
+}
+
+::view-transition-old(.tab-fade) {
+  animation-duration: var(--duration-fast);
+  animation-timing-function: var(--ease-standard);
+  animation-name: vibe-fade-out;
+}
+::view-transition-new(.tab-fade) {
+  animation-duration: var(--duration-fast);
+  animation-timing-function: var(--ease-standard);
+  animation-name: vibe-fade-in;
+}
+
+::view-transition-old(.nav-forward) {
+  animation-duration: var(--duration-fast);
+  animation-timing-function: var(--ease-standard);
+  animation-name: vibe-push-exit-left;
+}
+::view-transition-new(.nav-forward) {
+  animation-duration: var(--duration-fast);
+  animation-timing-function: var(--ease-standard);
+  animation-name: vibe-push-enter-right;
+}
+::view-transition-old(.nav-back) {
+  animation-duration: var(--duration-fast);
+  animation-timing-function: var(--ease-standard);
+  animation-name: vibe-push-exit-right;
+}
+::view-transition-new(.nav-back) {
+  animation-duration: var(--duration-fast);
+  animation-timing-function: var(--ease-standard);
+  animation-name: vibe-push-enter-left;
+}
+
+@keyframes vibe-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes vibe-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes vibe-push-exit-left {
+  to { transform: translateX(-100%); }
+}
+@keyframes vibe-push-enter-right {
+  from { transform: translateX(100%); }
+}
+@keyframes vibe-push-exit-right {
+  to { transform: translateX(100%); }
+}
+@keyframes vibe-push-enter-left {
+  from { transform: translateX(-100%); }
+}
+
+/* MID-24: un solo bloque de "reduced motion" para TODO lo que anima en la
+   app — las transiciones del Overlay (.overlay-panel/.overlay-scrim) y las
+   View Transitions de navegación de arriba. Con la preferencia activa,
+   ambas quedan instantáneas. */
+@media (prefers-reduced-motion: reduce) {
+  .overlay-panel,
+  .overlay-scrim {
+    transition-duration: 0ms !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }

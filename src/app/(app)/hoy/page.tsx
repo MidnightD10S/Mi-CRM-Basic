@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, ViewTransition } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { CalendarCheck, Check, MessageSquarePlus, TrendingUp, UserPlus2 } from "lucide-react";
@@ -34,6 +34,28 @@ type SeguimientoPendiente = {
 type AccesoRapido = "nueva-tarea" | "anotar-interaccion" | "registrar-venta" | "nuevo-cliente" | null;
 
 export default function HoyPage() {
+  return (
+    // MID-24: cross-fade al cambiar de tab (`default`) y mapa direccional
+    // para la salida hacia una Ficha (`nav-forward`/`nav-back`, pareja del
+    // mismo mapa en clientes/page.tsx y clientes/[id]/page.tsx) — sin esto,
+    // la doc de Next advierte que la salida de Hoy no tendría con qué
+    // emparejarse del lado de la Ficha.
+    <ViewTransition
+      default="tab-fade"
+      enter={{ "nav-forward": "nav-forward", "nav-back": "nav-back", default: "tab-fade" }}
+      exit={{ "nav-forward": "nav-forward", "nav-back": "nav-back", default: "tab-fade" }}
+    >
+      {/* `h-full overflow-y-auto`: acota la caja que la View Transition API
+          captura a lo que realmente se ve (no a la altura de todo el
+          contenido) — ver el comentario en src/app/(app)/layout.tsx. */}
+      <div className="h-full overflow-y-auto pb-16 md:pb-0">
+        <HoyPageContent />
+      </div>
+    </ViewTransition>
+  );
+}
+
+function HoyPageContent() {
   // La sesión ya está garantizada "lista" acá — RequireAuth (en el layout de
   // (app)) no renderiza children hasta que lo esté (ver MID-7).
   const pendientes = useQuery(api.seguimientos.listarPendientes);
@@ -44,6 +66,19 @@ export default function HoyPage() {
 
   const [ocultosOptimistas, setOcultosOptimistas] = useState<Set<Id<"seguimientos">>>(new Set());
   const [accesoAbierto, setAccesoAbierto] = useState<AccesoRapido>(null);
+
+  // MID-24: contadores que solo avanzan al abrir cada overlay con `key`
+  // propio (no al cerrar) — mismo criterio que la Ficha de cliente, ver su
+  // comentario. "nueva-tarea" y "nuevo-cliente" no usan `key` (resetean su
+  // propio formulario al cerrar), así que no necesitan contador.
+  const [anotarKey, setAnotarKey] = useState(0);
+  const [registrarKey, setRegistrarKey] = useState(0);
+
+  function abrirAcceso(tipo: Exclude<AccesoRapido, null>) {
+    if (tipo === "anotar-interaccion") setAnotarKey((k) => k + 1);
+    if (tipo === "registrar-venta") setRegistrarKey((k) => k + 1);
+    setAccesoAbierto(tipo);
+  }
 
   async function completar(seguimiento: SeguimientoPendiente) {
     setOcultosOptimistas((prev) => new Set(prev).add(seguimiento._id));
@@ -109,7 +144,7 @@ export default function HoyPage() {
         <Button
           variant="secondary"
           className="h-auto flex-col gap-1.5 py-3.5 text-[13px]"
-          onClick={() => setAccesoAbierto("anotar-interaccion")}
+          onClick={() => abrirAcceso("anotar-interaccion")}
         >
           <MessageSquarePlus size={20} strokeWidth={1.5} />
           Anotar interacción
@@ -117,7 +152,7 @@ export default function HoyPage() {
         <Button
           variant="secondary"
           className="h-auto flex-col gap-1.5 py-3.5 text-[13px]"
-          onClick={() => setAccesoAbierto("registrar-venta")}
+          onClick={() => abrirAcceso("registrar-venta")}
         >
           <TrendingUp size={20} strokeWidth={1.5} />
           Registrar venta
@@ -185,12 +220,12 @@ export default function HoyPage() {
         onClose={() => setAccesoAbierto(null)}
       />
       <AnotarInteraccionOverlay
-        key={`anotar-interaccion-${accesoAbierto === "anotar-interaccion" ? "abierto" : "cerrado"}`}
+        key={`anotar-${anotarKey}`}
         open={accesoAbierto === "anotar-interaccion"}
         onClose={() => setAccesoAbierto(null)}
       />
       <RegistrarVentaOverlay
-        key={`registrar-venta-${accesoAbierto === "registrar-venta" ? "abierto" : "cerrado"}`}
+        key={`registrar-${registrarKey}`}
         open={accesoAbierto === "registrar-venta"}
         onClose={() => setAccesoAbierto(null)}
       />
@@ -201,6 +236,7 @@ export default function HoyPage() {
       <NuevoClienteOverlay
         open={accesoAbierto === "nuevo-cliente"}
         onClose={() => setAccesoAbierto(null)}
+        origen="hoy"
       />
     </div>
   );
@@ -265,7 +301,9 @@ function FilaSeguimiento({
           <button
             type="button"
             className="flex min-w-0 flex-1 flex-col gap-1 text-left"
-            onClick={() => router.push(`/clientes/${item.clienteId}`)}
+            onClick={() =>
+              router.push(`/clientes/${item.clienteId}?from=hoy`, { transitionTypes: ["nav-forward"] })
+            }
           >
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[15px] font-medium">{item.cliente?.nombre ?? "Cliente eliminado"}</span>
@@ -306,7 +344,11 @@ function FilaInteraccionReciente({
         <button
           type="button"
           className="flex w-full flex-col gap-1 text-left"
-          onClick={() => router.push(`/clientes/${interaccion.clienteId}`)}
+          onClick={() =>
+            router.push(`/clientes/${interaccion.clienteId}?from=hoy`, {
+              transitionTypes: ["nav-forward"],
+            })
+          }
         >
           <div className="flex flex-wrap items-center gap-2">
             <Icono size={15} strokeWidth={1.5} className="text-(--color-text-subtle)" />

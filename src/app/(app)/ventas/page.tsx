@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, ViewTransition } from "react";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import { Plus, TrendingUp } from "lucide-react";
@@ -23,6 +23,22 @@ const FILTROS: { valor: FiltroVenta; etiqueta: string }[] = [
 ];
 
 export default function VentasPage() {
+  // MID-24: cross-fade al cambiar de tab — esta pantalla no recibe push
+  // horizontal (nadie navega a ella desde una lista), así que solo necesita
+  // `default`.
+  return (
+    <ViewTransition default="tab-fade">
+      {/* `h-full overflow-y-auto`: acota la caja que la View Transition API
+          captura a lo que realmente se ve — ver el comentario en
+          src/app/(app)/layout.tsx. */}
+      <div className="h-full overflow-y-auto pb-16 md:pb-0">
+        <VentasPageContent />
+      </div>
+    </ViewTransition>
+  );
+}
+
+function VentasPageContent() {
   // `ventas` (lista acotada a LIMITE_LISTADO, ver convex/ventas.ts) es solo
   // para las filas del listado. Las métricas y los contadores de los chips
   // SIEMPRE salen de `resumen` (lectura O(1) del resumen incremental), nunca
@@ -31,6 +47,15 @@ export default function VentasPage() {
   const resumen = useQuery(api.ventas.resumen);
   const [filtro, setFiltro] = useState<FiltroVenta>("todas");
   const [altaAbierta, setAltaAbierta] = useState(false);
+  // MID-24: igual que en Hoy/Ficha de cliente — el contador solo avanza al
+  // abrir, nunca al cerrar, para que el `key` no desmonte el overlay a
+  // mitad de su animación de cierre.
+  const [altaKey, setAltaKey] = useState(0);
+
+  function abrirAlta() {
+    setAltaKey((k) => k + 1);
+    setAltaAbierta(true);
+  }
 
   const cargando = ventas === undefined || resumen === undefined;
 
@@ -53,13 +78,13 @@ export default function VentasPage() {
           title="Sin ventas registradas todavía"
           description="Añadí la primera venta u oportunidad de un cliente para empezar a llevar el control."
           action={
-            <Button size="compact" onClick={() => setAltaAbierta(true)}>
+            <Button size="compact" onClick={abrirAlta}>
               Añadir venta
             </Button>
           }
         />
         <RegistrarVentaOverlay
-          key={altaAbierta ? "abierto" : "cerrado"}
+          key={altaKey}
           open={altaAbierta}
           onClose={() => setAltaAbierta(false)}
         />
@@ -81,7 +106,7 @@ export default function VentasPage() {
           variant="primary"
           size="compact"
           className="hidden md:flex"
-          onClick={() => setAltaAbierta(true)}
+          onClick={abrirAlta}
         >
           <Plus size={16} strokeWidth={2} />
           Añadir venta
@@ -146,14 +171,14 @@ export default function VentasPage() {
       <button
         type="button"
         aria-label="Añadir venta"
-        onClick={() => setAltaAbierta(true)}
+        onClick={abrirAlta}
         className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-(--radius-full) bg-(--color-primary) text-(--color-on-primary) shadow-[var(--shadow-lg)] md:hidden"
       >
         <Plus size={24} strokeWidth={2} />
       </button>
 
       <RegistrarVentaOverlay
-        key={altaAbierta ? "abierto" : "cerrado"}
+        key={altaKey}
         open={altaAbierta}
         onClose={() => setAltaAbierta(false)}
       />
@@ -215,7 +240,11 @@ function FilaVenta({
   return (
     <li>
       {venta.cliente ? (
-        <Link href={`/clientes/${venta.clienteId}`} className="block">
+        <Link
+          href={`/clientes/${venta.clienteId}?from=ventas`}
+          transitionTypes={["nav-forward"]}
+          className="block"
+        >
           {contenido}
         </Link>
       ) : (
