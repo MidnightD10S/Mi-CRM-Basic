@@ -49,3 +49,8 @@ next-env.d.ts
 
 # credenciales locales (MID-7): nunca deben subirse ni commitearse
 *.local.txt
+
+# playwright (MID-25): artefactos de cada corrida, no el código de la suite
+/test-results/
+/playwright-report/
+/blob-report/
