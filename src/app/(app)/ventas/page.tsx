@@ -240,7 +240,11 @@ function FilaVenta({
   return (
     <li>
       {venta.cliente ? (
-        <Link href={`/clientes/${venta.clienteId}`} className="block">
+        <Link
+          href={`/clientes/${venta.clienteId}?from=ventas`}
+          transitionTypes={["nav-forward"]}
+          className="block"
+        >
           {contenido}
         </Link>
       ) : (

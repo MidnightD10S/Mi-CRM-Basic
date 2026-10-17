@@ -68,11 +68,22 @@ function FichaClienteContent() {
   const searchParams = useSearchParams();
   // MID-24: "el botón atrás lleva de vuelta a la lista de clientes o a
   // Tareas del día, según desde dónde se entró" — el origen viaja en
-  // `?from=`, puesto por quien enlaza hacia aquí (Clientes o Hoy).
-  const origen = searchParams.get("from") === "hoy" ? "hoy" : "clientes";
+  // `?from=`, puesto por quien enlaza hacia aquí (Clientes, Hoy o Ventas).
+  const fromParam = searchParams.get("from");
+  const origen = fromParam === "hoy" || fromParam === "ventas" ? fromParam : "clientes";
+  const RUTA_ORIGEN: Record<typeof origen, string> = {
+    hoy: "/hoy",
+    ventas: "/ventas",
+    clientes: "/clientes",
+  };
+  const ETIQUETA_ORIGEN: Record<typeof origen, string> = {
+    hoy: "Hoy",
+    ventas: "Ventas",
+    clientes: "Clientes",
+  };
 
   function volver() {
-    router.push(origen === "hoy" ? "/hoy" : "/clientes", { transitionTypes: ["nav-back"] });
+    router.push(RUTA_ORIGEN[origen], { transitionTypes: ["nav-back"] });
   }
 
   const cliente = useQuery(api.clientes.obtener, { id: clienteId });
@@ -148,15 +159,15 @@ function FichaClienteContent() {
 
   return (
     <div className="mx-auto flex max-w-[860px] flex-col gap-5 p-5 pb-24">
-      {/* MID-24: vuelve a Clientes o a Hoy según `?from=`, puesto por quien
-          enlazó hacia esta ficha. */}
+      {/* MID-24: vuelve a Clientes, Hoy o Ventas según `?from=`, puesto por
+          quien enlazó hacia esta ficha. */}
       <button
         type="button"
         onClick={volver}
         className="flex w-fit items-center gap-1.5 text-[14px] font-medium text-(--color-text-muted) hover:text-(--color-text)"
       >
         <ArrowLeft size={16} strokeWidth={1.5} />
-        {origen === "hoy" ? "Hoy" : "Clientes"}
+        {ETIQUETA_ORIGEN[origen]}
       </button>
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1.5">

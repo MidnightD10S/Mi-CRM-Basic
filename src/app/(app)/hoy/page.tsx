@@ -236,6 +236,7 @@ function HoyPageContent() {
       <NuevoClienteOverlay
         open={accesoAbierto === "nuevo-cliente"}
         onClose={() => setAccesoAbierto(null)}
+        origen="hoy"
       />
     </div>
   );
