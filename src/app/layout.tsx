@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
-const inter = Inter({
+// Alojadas localmente (ver src/app/fonts/) en vez de `next/font/google`: esta
+// última necesita salir a internet durante `next build` para traer la fuente,
+// y ese paso fue lo que hizo fallar el deploy en Railway (el build ahí no
+// pudo resolver la fuente de Google) — autoalojarlas saca esa dependencia de
+// red del build por completo. Son variables (un solo archivo cubre todo el
+// rango de pesos), descargadas del mismo subset "latin" que se usaba antes.
+const inter = localFont({
+  src: "./fonts/inter-variable.woff2",
   variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: "400 600",
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const jetbrainsMono = localFont({
+  src: "./fonts/jetbrains-mono-variable.woff2",
   variable: "--font-jetbrains-mono",
-  subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: "400 500",
 });
 
 export const metadata: Metadata = {
