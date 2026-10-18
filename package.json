@@ -11,7 +11,8 @@
     "dev:all": "concurrently -n NEXT,CONVEX -c blue,green \"npm:dev\" \"npm:dev:convex\"",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@auth/core": "^0.41.3",
