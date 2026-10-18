@@ -11,7 +11,7 @@ import { requireUsuario } from "./authHelpers";
  */
 
 const USUARIOS_SEED = [
-  { nombre: "Emiliana", email: "emiliana@vibe-crm.local", rol: "propietaria" as const },
+  { nombre: "Emiliana", email: "mbasiliosalinas@gmail.com", rol: "propietaria" as const },
   { nombre: "Marcelo", email: "marcelo@vibe-crm.local", rol: "comercial" as const },
 ];
 
@@ -67,6 +67,78 @@ export const listar = query({
       nombre: usuario.nombre,
       rol: usuario.rol,
     }));
+  },
+});
+
+/**
+ * MID-46: migra el email de una persona ya aprovisionada, de forma atómica,
+ * en las tres filas que determinan si el login funciona — cambiar solo
+ * `usuarios.email` deja autenticando con éxito pero sin autorización (el
+ * JWT seguiría llevando el email viejo vía `users.email`), y cambiar solo
+ * eso además rompería el login por contraseña existente (que busca la
+ * cuenta por `authAccounts.providerAccountId`, no por `usuarios.email`).
+ * Se ejecuta a mano, una vez por deployment:
+ *   npx convex run usuarios:migrarEmailUsuario '{"emailViejo":"...","emailNuevo":"..."}'
+ */
+export const migrarEmailUsuario = internalMutation({
+  args: { emailViejo: v.string(), emailNuevo: v.string() },
+  handler: async (ctx, { emailViejo, emailNuevo }) => {
+    const usuario = await ctx.db
+      .query("usuarios")
+      .withIndex("by_email", (q) => q.eq("email", emailViejo))
+      .unique();
+    if (!usuario) {
+      throw new Error(`No hay un usuario con email ${emailViejo}.`);
+    }
+    // Preflight en las tres tablas: `requireUsuario`/el login usan
+    // `.unique()` — un duplicado en cualquiera de ellas rompería la
+    // resolución de identidad para cualquiera de las dos cuentas.
+    const usuarioColision = await ctx.db
+      .query("usuarios")
+      .withIndex("by_email", (q) => q.eq("email", emailNuevo))
+      .unique();
+    if (usuarioColision) {
+      throw new Error(`Ya existe un usuario con email ${emailNuevo}.`);
+    }
+
+    const authUser = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", emailViejo))
+      .unique();
+    if (!authUser) {
+      throw new Error(`No hay cuenta de Auth con email ${emailViejo}.`);
+    }
+    const authUserColision = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", emailNuevo))
+      .unique();
+    if (authUserColision) {
+      throw new Error(`Ya existe una cuenta de Auth con email ${emailNuevo}.`);
+    }
+
+    const authAccount = await ctx.db
+      .query("authAccounts")
+      .withIndex("providerAndAccountId", (q) =>
+        q.eq("provider", "password").eq("providerAccountId", emailViejo)
+      )
+      .unique();
+    const authAccountColision = await ctx.db
+      .query("authAccounts")
+      .withIndex("providerAndAccountId", (q) =>
+        q.eq("provider", "password").eq("providerAccountId", emailNuevo)
+      )
+      .unique();
+    if (authAccountColision) {
+      throw new Error(`Ya existe una cuenta de password con email ${emailNuevo}.`);
+    }
+
+    await ctx.db.patch(usuario._id, { email: emailNuevo });
+    await ctx.db.patch(authUser._id, { email: emailNuevo });
+    // No se exige que exista: cubre a alguien que todavía no tenga
+    // credencial de password provisionada.
+    if (authAccount) {
+      await ctx.db.patch(authAccount._id, { providerAccountId: emailNuevo });
+    }
   },
 });
 

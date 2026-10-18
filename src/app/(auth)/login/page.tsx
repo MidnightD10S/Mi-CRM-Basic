@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
@@ -21,8 +21,11 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * MID-44 — deliberadamente fuera de alcance de esta pantalla (decisión
  * explícita: el envío de email real necesitaría un proveedor como Resend).
  */
-export default function LoginPage() {
+// `useSearchParams` obliga a envolver en Suspense (requisito de Next.js
+// para no romper el render estático de la página) — ver export default.
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isLoading, isAuthenticated } = useConvexAuth();
   const { signIn } = useAuthActions();
 
@@ -30,6 +33,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [enviandoGoogle, setEnviandoGoogle] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,6 +41,18 @@ export default function LoginPage() {
       router.replace("/hoy");
     }
   }, [isLoading, isAuthenticated, router]);
+
+  // MID-46: Convex Auth no manda ningún código de error en la URL de
+  // retorno cuando rechaza un login de Google (ver convex/auth.ts) — solo
+  // redirige de vuelta sin crear sesión. El `?google=1` lo agregamos
+  // nosotros mismos antes de salir hacia Google (más abajo) para poder
+  // distinguir "volvimos de un intento fallido" de "alguien entró
+  // directamente a /login" — se deriva en cada render, sin `useEffect`,
+  // para no disparar un `setState` en efecto.
+  const errorGoogle =
+    !isLoading && !isAuthenticated && searchParams.get("google") === "1"
+      ? "No se pudo completar el inicio de sesión con Google. Si tu cuenta no está autorizada, contactá a la propietaria."
+      : null;
 
   const puedeEnviar = Boolean(EMAIL_REGEX.test(email) && password.trim() && !enviando);
 
@@ -55,6 +71,17 @@ export default function LoginPage() {
     }
   }
 
+  async function entrarConGoogle() {
+    setEnviandoGoogle(true);
+    setError(null);
+    try {
+      await signIn("google", { redirectTo: "/login?google=1" });
+    } catch {
+      setError("No se pudo iniciar el inicio de sesión con Google.");
+      setEnviandoGoogle(false);
+    }
+  }
+
   return (
     <>
       <div className="flex flex-col items-center gap-2 text-center">
@@ -65,12 +92,12 @@ export default function LoginPage() {
       </div>
 
       <form className="flex flex-col gap-4" onSubmit={entrar}>
-        {error && (
+        {(error ?? errorGoogle) && (
           <div
             role="alert"
             className="rounded-(--radius-md) border border-(--color-error) bg-(--color-error-bg) px-3.5 py-2.5 text-[14px] font-medium text-(--color-error-text)"
           >
-            {error}
+            {error ?? errorGoogle}
           </div>
         )}
 
@@ -118,6 +145,24 @@ export default function LoginPage() {
           {enviando ? "Entrando…" : "Entrar"}
         </Button>
       </form>
+
+      <div className="flex items-center gap-3 text-[13px] text-(--color-text-subtle)">
+        <div className="h-px flex-1 bg-(--color-border)" />
+        o
+        <div className="h-px flex-1 bg-(--color-border)" />
+      </div>
+
+      <Button type="button" variant="secondary" disabled={enviandoGoogle} onClick={entrarConGoogle}>
+        {enviandoGoogle ? "Conectando…" : "Continuar con Google"}
+      </Button>
     </>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }
