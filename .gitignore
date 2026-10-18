@@ -47,10 +47,16 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# credenciales locales (MID-7): nunca deben subirse ni commitearse
+# credenciales locales (MID-7, MID-25): nunca deben subirse ni commitearse
 *.local.txt
+*.local.json
 
 # playwright (MID-25): artefactos de cada corrida, no el código de la suite
 /test-results/
 /playwright-report/
 /blob-report/
+
+# MID-25: scratch de Convex con borrado amplio — ad-hoc, nunca se commitea
+# (ver tests/e2e/README.md). Red de seguridad por si un `git add` amplio lo
+# agarra sin querer — la disciplina real sigue siendo no commitearlo nunca.
+convex/_scratch*.ts

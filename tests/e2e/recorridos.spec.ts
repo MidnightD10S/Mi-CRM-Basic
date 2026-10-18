@@ -2,11 +2,11 @@ import { test, expect, type Page } from "playwright/test";
 import { convexRunJson } from "./convex-cli";
 import {
   E2E_EMAIL,
-  E2E_PASSWORD,
   NOMBRE_CLIENTE_UNO,
   NOMBRE_CLIENTE_DOS,
   NOMBRE_CLIENTE_TRES,
   NOTA_SENTINEL,
+  leerPasswordE2E,
 } from "./fixtures";
 
 /**
@@ -21,7 +21,7 @@ import {
 async function login(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(E2E_EMAIL);
-  await page.locator("#login-password").fill(E2E_PASSWORD);
+  await page.locator("#login-password").fill(leerPasswordE2E());
   await page.getByRole("button", { name: "Entrar" }).click();
   await page.waitForURL(/\/(hoy|clientes|ventas)/);
 }
