@@ -156,12 +156,31 @@ export const listar = query({
     // completo, pero no hay motivo para exponerlos a cualquier llamador de
     // esta query pública (sin auth todavía) — la lista solo necesita nombre,
     // estado y fecha de alta. Mismo criterio ya aplicado en usuarios.ts.
-    return coincidentes.map((cliente) => ({
-      _id: cliente._id,
-      nombre: cliente.nombre,
-      estado: cliente.estado,
-      creadoEn: cliente.creadoEn,
-    }));
+    //
+    // `ultimoContacto` (hallazgo de auditoría PRD↔código): la Lista de
+    // clientes tiene que mostrar "un dato de referencia (p. ej. el último
+    // contacto)" — ahora que MID-16 (Interacciones) ya existe, se busca la
+    // interacción más reciente de cada cliente por el índice `by_cliente`
+    // ya existente (N+1 de lecturas indexadas, acotado por `LIMITE_LISTADO`,
+    // mismo criterio de alcance MVP que el resto de este archivo). `null`
+    // cuando el cliente todavía no tiene ninguna interacción registrada — la
+    // UI cae ahí a la fecha de alta.
+    return await Promise.all(
+      coincidentes.map(async (cliente) => {
+        const [ultimaInteraccion] = await ctx.db
+          .query("interacciones")
+          .withIndex("by_cliente", (q) => q.eq("clienteId", cliente._id))
+          .order("desc")
+          .take(1);
+        return {
+          _id: cliente._id,
+          nombre: cliente.nombre,
+          estado: cliente.estado,
+          creadoEn: cliente.creadoEn,
+          ultimoContacto: ultimaInteraccion?.fecha ?? null,
+        };
+      })
+    );
   },
 });
 

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { NuevoClienteOverlay } from "./nuevo-cliente-overlay";
 import { ESTADOS_CLIENTE, estadoClienteOFallback } from "@/lib/constants";
+import { formatRelativePast } from "@/lib/format";
 import { api } from "@/lib/convex-generated";
 
 export default function ClientesPage() {
@@ -133,10 +134,24 @@ export default function ClientesPage() {
 function FilaCliente({
   cliente,
 }: {
-  cliente: { _id: string; nombre: string; estado?: "nuevo_lead" | "en_negociacion" | "ganado" | "perdido"; creadoEn: number };
+  cliente: {
+    _id: string;
+    nombre: string;
+    estado?: "nuevo_lead" | "en_negociacion" | "ganado" | "perdido";
+    creadoEn: number;
+    ultimoContacto: number | null;
+  };
 }) {
   const estado = estadoClienteOFallback(cliente.estado);
   const estadoInfo = ESTADOS_CLIENTE[estado];
+  // `formatRelativePast` devuelve con mayúscula inicial ("Hace 3 días") para
+  // usarse como oración propia (ver FilaInteraccionReciente en
+  // hoy/page.tsx); acá va insertado a mitad de frase, así que se pasa a
+  // minúscula la primera letra.
+  const referencia =
+    cliente.ultimoContacto !== null
+      ? `Último contacto: ${minusculaInicial(formatRelativePast(new Date(cliente.ultimoContacto)))}`
+      : `Cliente desde ${new Date(cliente.creadoEn).toLocaleDateString("es-ES")}`;
 
   return (
     <li>
@@ -154,14 +169,13 @@ function FilaCliente({
             <span className="text-[15px] font-medium">{cliente.nombre}</span>
             <Badge tone={estadoInfo.tone}>{estadoInfo.label}</Badge>
           </div>
-          {/* "Cliente desde" usa la fecha de alta, no la de último contacto —
-              todavía no existen interacciones registradas (MID-16 pendiente).
-              Cuando exista, este dato se reemplaza por el último contacto real. */}
-          <span className="text-[13px] text-(--color-text-subtle)">
-            Cliente desde {new Date(cliente.creadoEn).toLocaleDateString("es-ES")}
-          </span>
+          <span className="text-[13px] text-(--color-text-subtle)">{referencia}</span>
         </Card>
       </Link>
     </li>
   );
+}
+
+function minusculaInicial(texto: string): string {
+  return texto.charAt(0).toLowerCase() + texto.slice(1);
 }
