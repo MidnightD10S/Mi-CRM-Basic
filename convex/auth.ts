@@ -1,7 +1,54 @@
 import { convexAuth } from "@convex-dev/auth/server";
 import { Password } from "@convex-dev/auth/providers/Password";
+import { Email } from "@convex-dev/auth/providers/Email";
 import Google from "@auth/core/providers/google";
 import type { MutationCtx } from "./_generated/server";
+
+// MID-44: 10 minutos de vida para el código de reset — más corto que el
+// default de 1h de Convex Auth, porque es un código de 6 dígitos (más
+// fácil de adivinar a fuerza bruta que el token largo default) y de todas
+// formas `verifyCodeAndSignIn` ya aplica rate limiting contra eso.
+const DURACION_CODIGO_RESET_S = 10 * 60;
+
+// `generateVerificationToken` está tipado `() => Promise<string>` (no
+// `string` sincrónico) en @convex-dev/auth — tiene que ser `async`.
+async function generarCodigoReset(): Promise<string> {
+  const bytes = new Uint8Array(4);
+  crypto.getRandomValues(bytes);
+  const numero = new DataView(bytes.buffer).getUint32(0);
+  return String(numero % 1_000_000).padStart(6, "0");
+}
+
+/**
+ * MID-44: provider de email para `Password({ reset: ... })` — por default
+ * Convex Auth genera un token de 32 caracteres pensado para ir en un link
+ * (`url`), no para que una persona lo tipee; `generateVerificationToken`
+ * lo cambia por un código numérico corto, y `sendVerificationRequest` usa
+ * el campo `token` (el mismo código) en vez de `url` para mandarlo por
+ * email con Resend (dominio `contalia.app`, ya verificado).
+ */
+const resetPorCodigo = Email({
+  maxAge: DURACION_CODIGO_RESET_S,
+  generateVerificationToken: generarCodigoReset,
+  async sendVerificationRequest({ identifier: email, token }) {
+    const resp = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "Vibe CRM <no-reply@contalia.app>",
+        to: email,
+        subject: "Tu código para restablecer la contraseña",
+        text: `Tu código es: ${token}\n\nVence en 10 minutos. Si no lo pediste, podés ignorar este mensaje.`,
+      }),
+    });
+    if (!resp.ok) {
+      throw new Error(`No se pudo enviar el email de reset: ${resp.status} ${await resp.text()}`);
+    }
+  },
+});
 
 /**
  * TODO(MID-7/MID-46): no hay registro público — las únicas cuentas válidas
@@ -22,6 +69,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         }
         return { email: params.email as string };
       },
+      reset: resetPorCodigo,
     }),
     // El mapeo default de Auth.js descarta `email_verified` antes de que
     // llegue a `createOrUpdateUser` (`defaultProfile` en
