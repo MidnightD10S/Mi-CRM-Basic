@@ -2,7 +2,20 @@ import { convexAuth } from "@convex-dev/auth/server";
 import { Password } from "@convex-dev/auth/providers/Password";
 import { Email } from "@convex-dev/auth/providers/Email";
 import Google from "@auth/core/providers/google";
-import type { MutationCtx } from "./_generated/server";
+import { RateLimiter, HOUR } from "@convex-dev/rate-limiter";
+import { components } from "./_generated/api";
+import type { ActionCtx, MutationCtx } from "./_generated/server";
+
+// MID-48: la emisión de códigos de reset no tenía ningún límite propio — el
+// rate limiting que trae @convex-dev/auth protege la *verificación* del
+// código (cuántos intentos de adivinarlo), no su *emisión* (cuántos emails
+// se mandan). Sin esto, repetir la solicitud de reset permite bombardear de
+// emails a una cuenta y agotar la cuota de Resend. Límite por destinatario,
+// no por IP: es lo que impide el abuso contra una cuenta puntual sin
+// necesitar acceso a la IP del caller desde `sendVerificationRequest`.
+const rateLimiter = new RateLimiter(components.rateLimiter, {
+  resetEmailSolicitado: { kind: "token bucket", rate: 3, period: HOUR },
+});
 
 // MID-44: 10 minutos de vida para el código de reset — más corto que el
 // default de 1h de Convex Auth, porque es un código de 6 dígitos (más
@@ -26,11 +39,33 @@ async function generarCodigoReset(): Promise<string> {
  * lo cambia por un código numérico corto, y `sendVerificationRequest` usa
  * el campo `token` (el mismo código) en vez de `url` para mandarlo por
  * email con Resend (dominio `contalia.app`, ya verificado).
+ *
+ * MID-48: `sendVerificationRequest` recibe `ctx` como segundo parámetro
+ * (Convex Auth lo pasa igual para providers de tipo "email", aunque el tipo
+ * público no lo declara — ver `handleEmailAndPhoneProvider` en
+ * @convex-dev/auth/server/implementation/signIn.ts). Se usa para consultar
+ * el rate limit antes de llamar a Resend.
  */
 const resetPorCodigo = Email({
   maxAge: DURACION_CODIGO_RESET_S,
   generateVerificationToken: generarCodigoReset,
-  async sendVerificationRequest({ identifier: email, token }) {
+  async sendVerificationRequest(
+    { identifier: email, token }: { identifier: string; token: string },
+    // Opcional en el tipo porque el `sendVerificationRequest` público de
+    // @auth/core declara un solo parámetro — Convex Auth igual pasa `ctx`
+    // en runtime (ver nota arriba); si alguna vez deja de pasarlo, el
+    // límite simplemente no se aplicaría en vez de romper el tipo.
+    ctx?: ActionCtx,
+  ) {
+    // Límite de emisión por email (no de verificación, que ya cubre la
+    // librería): si se excede, no se manda el email, pero tampoco se avisa
+    // nada distinto al caller — misma respuesta silenciosa que ya usa este
+    // flujo para no revelar si la cuenta existe (ver recuperar-contrasena).
+    if (ctx) {
+      const { ok } = await rateLimiter.limit(ctx, "resetEmailSolicitado", { key: email });
+      if (!ok) return;
+    }
+
     const resp = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
