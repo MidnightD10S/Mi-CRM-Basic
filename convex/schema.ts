@@ -12,8 +12,9 @@ import { authTables } from "@convex-dev/auth/server";
  *
  * MID-7: autenticación resuelta con @convex-dev/auth (provider Password,
  * ver convex/auth.ts) — `authTables` trae sus propias tablas (`users`,
- * `authAccounts`, etc.), separadas de `usuarios`. TODO(MID-44): falta el
- * mecanismo real de recuperación de contraseña (hoy solo placeholder).
+ * `authAccounts`, `authVerificationCodes`, etc.), separadas de `usuarios`.
+ * MID-44: recuperación de contraseña real (código por email, vía
+ * `authVerificationCodes` y el `reset` de `convex/auth.ts`).
  */
 export default defineSchema({
   ...authTables,
