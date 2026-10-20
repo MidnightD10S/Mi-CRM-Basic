@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { LogOut } from "lucide-react";
+import { LogOut, UserRound } from "lucide-react";
 import { NAV_ITEMS } from "@/components/layout/nav-items";
 import { useSessionUsuario } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -57,6 +57,19 @@ export function TabBar() {
           </Link>
         );
       })}
+      {/* MID-8: no es un item de NAV_ITEMS (visible para cualquier rol,
+          siempre) — sin esto, /cuenta no tenía ningún link alcanzable en
+          móvil (solo existía el de Sidebar en escritorio). */}
+      <Link
+        href="/cuenta"
+        className={cn(
+          "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium",
+          pathname.startsWith("/cuenta") ? "text-(--color-primary)" : "text-(--color-text-subtle)"
+        )}
+      >
+        <UserRound size={22} strokeWidth={1.5} />
+        Cuenta
+      </Link>
       {/* No es un item de NAV_ITEMS (no es una ruta) — es la única forma de
           cerrar sesión disponible en móvil, donde Sidebar no existe. */}
       <button

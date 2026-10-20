@@ -5,6 +5,7 @@ import Google from "@auth/core/providers/google";
 import { RateLimiter, HOUR } from "@convex-dev/rate-limiter";
 import { components } from "./_generated/api";
 import type { ActionCtx, MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 // MID-48: la emisión de códigos de reset no tenía ningún límite propio — el
 // rate limiting que trae @convex-dev/auth protege la *verificación* del
@@ -139,6 +140,22 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       const ctx = genericCtx as unknown as MutationCtx;
       const email = typeof args.profile.email === "string" ? args.profile.email : undefined;
 
+      // MID-9: mantiene `usuarios.authUserId` al día con la identidad de
+      // Auth real detrás de cada email, en todas las ramas de este
+      // callback — es lo que permite que `requireUsuario` deje de
+      // autorizar un access token viejo en cuanto se reaprovisiona el
+      // mismo email para otra persona (hallazgo de auditoría M4).
+      async function sincronizarAuthUserId(userId: Id<"users">) {
+        if (!email) return;
+        const usuario = await ctx.db
+          .query("usuarios")
+          .withIndex("by_email", (q) => q.eq("email", email))
+          .unique();
+        if (usuario && usuario.authUserId !== userId) {
+          await ctx.db.patch(usuario._id, { authUserId: userId });
+        }
+      }
+
       if (args.type === "oauth") {
         // Las dos condiciones son necesarias: un email sin verificar no
         // prueba titularidad, y un email verificado pero no aprovisionado
@@ -162,6 +179,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         if (email) {
           await ctx.db.patch(args.existingUserId, { email });
         }
+        await sincronizarAuthUserId(args.existingUserId);
         return args.existingUserId;
       }
 
@@ -175,6 +193,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           .withIndex("email", (q) => q.eq("email", email))
           .unique();
         if (existente) {
+          await sincronizarAuthUserId(existente._id);
           return existente._id;
         }
       }
@@ -183,10 +202,12 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       // `emailVerified === true` más arriba; el provider de password no
       // verifica nada, así que nunca debe quedar marcado como verificado.
       const emailVerificado = args.type === "oauth" && email !== undefined;
-      return await ctx.db.insert("users", {
+      const nuevoUserId = await ctx.db.insert("users", {
         email,
         ...(emailVerificado ? { emailVerificationTime: Date.now() } : null),
       });
+      await sincronizarAuthUserId(nuevoUserId);
+      return nuevoUserId;
     },
   },
   jwt: {

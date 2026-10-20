@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { Input } from "@/components/ui/input";
@@ -18,14 +18,22 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * — a propósito NO se distingue ese caso del éxito: tanto el mensaje como
  * la navegación al paso 2 son siempre los mismos, para no revelar si un
  * email está o no aprovisionado (regla MID-7).
+ *
+ * MID-9: el email de invitación/reingreso (`convex/usuarios.ts:crear`) trae
+ * a la persona directo acá con `?invitacion=1`, en vez de a `/login` — es
+ * el mismo paso 1 de siempre (pedir el email), solo con un mensaje
+ * contextual distinto; no hace falta ninguna pantalla nueva.
  */
-export default function RecuperarContrasenaPage() {
+// `useSearchParams` obliga a envolver en Suspense (mismo motivo que login/page.tsx).
+function RecuperarContrasenaForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signIn } = useAuthActions();
 
   const [email, setEmail] = useState("");
   const [enviando, setEnviando] = useState(false);
 
+  const esInvitacion = searchParams.get("invitacion") === "1";
   const puedeEnviar = Boolean(EMAIL_REGEX.test(email) && !enviando);
 
   async function enviar(event: FormEvent<HTMLFormElement>) {
@@ -46,9 +54,13 @@ export default function RecuperarContrasenaPage() {
         <span className="flex h-10 w-10 items-center justify-center rounded-(--radius-lg) bg-(--color-primary) text-base font-semibold text-(--color-on-primary)">
           V
         </span>
-        <h1 className="text-2xl font-semibold tracking-[var(--tracking-tight)]">Recuperar contraseña</h1>
+        <h1 className="text-2xl font-semibold tracking-[var(--tracking-tight)]">
+          {esInvitacion ? "Te invitaron a Vibe CRM" : "Recuperar contraseña"}
+        </h1>
         <p className="text-[13px] text-(--color-text-subtle)">
-          Te vamos a mandar un código a tu email si corresponde a una cuenta existente.
+          {esInvitacion
+            ? "Ingresá tu email y te mandamos un código para que crees tu contraseña."
+            : "Te vamos a mandar un código a tu email si corresponde a una cuenta existente."}
         </p>
       </div>
 
@@ -74,5 +86,13 @@ export default function RecuperarContrasenaPage() {
         </Link>
       </form>
     </>
+  );
+}
+
+export default function RecuperarContrasenaPage() {
+  return (
+    <Suspense fallback={null}>
+      <RecuperarContrasenaForm />
+    </Suspense>
   );
 }

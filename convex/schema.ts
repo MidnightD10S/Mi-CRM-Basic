@@ -23,6 +23,14 @@ export default defineSchema({
     nombre: v.string(),
     email: v.string(),
     rol: v.union(v.literal("propietaria"), v.literal("comercial")),
+    // MID-9: id de `users` (tabla de Convex Auth) de la identidad que
+    // efectivamente logueó con este email, mantenido al día por
+    // `createOrUpdateUser` (convex/auth.ts). `requireUsuario` exige que
+    // coincida con la identidad del token actual, no solo que el email
+    // coincida — así, si esta fila se borra y el mismo email se reaprovisiona
+    // para otra persona, un access token emitido antes para la persona vieja
+    // deja de autorizar de inmediato (no depende de que venza).
+    authUserId: v.optional(v.id("users")),
     // Bootstrap de credenciales (MID-7, ver convex/usuarios.ts): opcional,
     // sin tocar nada existente. El estado "creada" NO tiene campo `password`
     // — no se conserva texto plano una vez verificada la cuenta.
