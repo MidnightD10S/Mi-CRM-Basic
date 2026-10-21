@@ -106,6 +106,11 @@ function contarPropietarias(usuarios: { rol: "propietaria" | "comercial" }[]) {
   return usuarios.filter((u) => u.rol === "propietaria").length;
 }
 
+// Mismo chequeo de forma (no RFC 5322 completo) que ya usa `clientes.ts` —
+// se duplica la constante en vez de compartir un módulo: dos archivos no
+// justifican todavía una abstracción nueva.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /**
  * MID-9: alta de una persona nueva — solo la Dueña. Hace la parte de
  * `usuarios` + decide si hay que aprovisionar login por contraseña; el envío
@@ -174,6 +179,15 @@ async function enviarEmailResend(opts: { to: string; subject: string; text: stri
  * `mutation`) porque necesita poder crear la cuenta de password
  * (`createAccount`, solo disponible en acciones) y mandar el email por
  * Resend (`fetch`, tampoco disponible en una mutation).
+ *
+ * Corrección de hallazgo de auditoría M1: `nombre`/`email` se recortan y
+ * validan UNA sola vez, acá, al principio — antes de tocar nada. Los
+ * valores ya normalizados (`nombreLimpio`/`emailLimpio`) son los que se
+ * usan en las tres llamadas que siguen (`_crearInterno`, `createAccount`,
+ * `enviarEmailResend`), nunca los `args` crudos: si cada una normalizara
+ * por su cuenta, la fila de `usuarios` y la cuenta de login podrían
+ * terminar con un email ligeramente distinto (p. ej. con espacios), y esa
+ * persona quedaría sin poder loguearse.
  */
 export const crear = action({
   args: {
@@ -182,9 +196,18 @@ export const crear = action({
     rol: v.union(v.literal("propietaria"), v.literal("comercial")),
   },
   handler: async (ctx: ActionCtx, { nombre, email, rol }) => {
+    const nombreLimpio = nombre.trim();
+    if (!nombreLimpio) {
+      throw new Error("El nombre no puede estar vacío.");
+    }
+    const emailLimpio = email.trim();
+    if (!EMAIL_REGEX.test(emailLimpio)) {
+      throw new Error("El email no tiene un formato válido.");
+    }
+
     const { yaTeniaCuenta } = await ctx.runMutation(internal.usuarios._crearInterno, {
-      nombre,
-      email,
+      nombre: nombreLimpio,
+      email: emailLimpio,
       rol,
     });
 
@@ -210,8 +233,8 @@ export const crear = action({
       const passwordAleatoria = btoa(String.fromCharCode(...bytes));
       await createAccount(ctx, {
         provider: "password",
-        account: { id: email, secret: passwordAleatoria },
-        profile: { email },
+        account: { id: emailLimpio, secret: passwordAleatoria },
+        profile: { email: emailLimpio },
       });
     }
 
@@ -222,18 +245,18 @@ export const crear = action({
         // Ya tiene contraseña de este CRM — directo al login normal, sin
         // pasar por el flujo de configurar una nueva.
         await enviarEmailResend({
-          to: email,
+          to: emailLimpio,
           subject: "Te sumaron de nuevo al equipo de Vibe CRM",
-          text: `Hola ${nombre},\n\nTe volvieron a sumar al equipo de Vibe CRM. Ya podés iniciar sesión con tu contraseña existente:\n${sitio}/login\n`,
+          text: `Hola ${nombreLimpio},\n\nTe volvieron a sumar al equipo de Vibe CRM. Ya podés iniciar sesión con tu contraseña existente:\n${sitio}/login\n`,
         });
       } else {
         // Directo al paso 1 de "recuperar contraseña" (MID-44, reusado como
         // "configurar por primera vez") — no al login, para no hacerle dar
         // una vuelta de más a alguien que todavía no tiene contraseña.
         await enviarEmailResend({
-          to: email,
+          to: emailLimpio,
           subject: "Te invitaron a unirte al equipo de Vibe CRM",
-          text: `Hola ${nombre},\n\nTe invitaron a unirte al equipo de Vibe CRM. Ingresá a este link con tu email para que te mandemos un código y puedas crear tu contraseña:\n${sitio}/recuperar-contrasena?invitacion=1\n`,
+          text: `Hola ${nombreLimpio},\n\nTe invitaron a unirte al equipo de Vibe CRM. Ingresá a este link con tu email para que te mandemos un código y puedas crear tu contraseña:\n${sitio}/recuperar-contrasena?invitacion=1\n`,
         });
       }
     } catch {
